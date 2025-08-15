@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: 108 99 255; /* rgb tuple for Tailwind inline styles if needed */
+}
+
+html, body {
+  height: 100%;
+}
+
+/* --- Life Planner theme helpers --- */
+:root {
+  --lp-surface: #0B1220;      /* deep navy background for dark sections */
+  --lp-card: #ffffff;         /* white cards */
+  --lp-ring: 223 223 234;     /* soft ring */
+  --lp-accent: 99 102 241;    /* indigo-500 rgb */
+  --lp-muted: #64748b;        /* slate-500 */
+}
+
+.lp-card {
+  border-radius: 1rem;
+  background: var(--lp-card);
+  border: 1px solid rgb(var(--lp-ring));
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .04), 0 12px 24px rgba(2, 6, 23, .04);
+}
+
+.lp-pill {
+  padding: .25rem .75rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(var(--lp-ring));
+  background: #fff;
+}
+
+.lp-pill--active {
+  background: rgb(var(--lp-accent));
+  border-color: rgb(var(--lp-accent));
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(99,102,241,.25);
+}
+
+.lp-chip {
+  padding: .125rem .5rem;
+  border-radius: 9999px;
+  background: rgba(var(--lp-accent), .08);
+  color: rgb(var(--lp-accent));
+  border: 1px solid rgba(var(--lp-accent), .25);
+  font-size: .75rem;
+}
+
+.lp-h { /* section heading */
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* ---- kill any skeleton/placeholder opacity that slipped in ---- */
+.skeleton-off, .skeleton-off * {
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* ---- Hard stop for any dim/placeholder styles that slipped in ---- */
+.skeleton-off, .skeleton-off * { opacity: 1 !important; filter: none !important; }
+
+/* Bump common muted Tailwind classes inside the planner container */
+.skeleton-off .text-slate-300 { color: #334155 !important; } /* → slate-700 */
+.skeleton-off .text-slate-400 { color: #334155 !important; } /* → slate-700 */
+.skeleton-off .text-slate-500 { color: #1f2937 !important; } /* → slate-800 */
+.skeleton-off .text-slate-600 { color: #1f2937 !important; } /* → slate-800 */
+.skeleton-off .text-white\/70 { color: #ffffff !important; }
+.skeleton-off .text-white\/80 { color: #ffffff !important; }
+.skeleton-off [class*="opacity-"] { opacity: 1 !important; }
+
+/* Make headings crisp */
+.skeleton-off h1, .skeleton-off h2, .skeleton-off .font-semibold { color: #0f172a !important; }
