@@ -24,6 +24,7 @@
   z-index: 1;
 }
 
+
 :root {
   --accent: 108 99 255; /* rgb tuple for Tailwind inline styles if needed */
 }

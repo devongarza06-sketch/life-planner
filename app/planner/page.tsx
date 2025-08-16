@@ -219,7 +219,7 @@ function BudgetScales() {
   );
 
   return (
-    <div className="rounded-3xl p-6 bg-[var(--lp-surface)] text-white shadow-inner">
+    <div className="rounded-3xl p-6 bg-[var(--lp-surface)] text-white shadow-inner" data-component="BudgetScales">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl lp-h flex items-center gap-2"><span>🗓️</span> Weekly & Daily Scales</h2>
         <div className="flex gap-2">
@@ -253,7 +253,7 @@ function WeeklyPlanner() {
     { id: 5, day: 5, start: "17:00", end: "17:45", bucket: "Misc", title: "Weekly maintenance block", fixed: true },
   ]);
   return (
-  <div className="lp-card">
+  <div className="lp-card" data-component="WeeklyPlanner">
     <CardHeader title="Weekly Planner" />
     <CardBody>
       <p className="text-sm text-slate-600 mb-3">
@@ -309,7 +309,7 @@ function StrategyTree({ root }: { root?: TreeNode }) {
   const render = (node: TreeNode): React.ReactNode => {
     const kids = node.children || [];
     return (
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center" data-component="StrategyTree">
         <NodeBox node={node} />
         {kids.length > 0 && (
           <>
@@ -355,7 +355,7 @@ function AIDBoard({ rubric = "IART+G", sample }: { rubric?: string; sample: { ac
     <Card>
       <CardHeader title={`A/I/D — Rubric: ${rubric}`} />
       <CardBody>
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-3 gap-6" data-component="AIDBoard">
           {cols.map((col) => (
             <div key={col.name} className="rounded-2xl border border-slate-300 bg-white p-3">
               <div className="flex items-center justify-between mb-2">
@@ -385,7 +385,7 @@ function VisionBoxes({ v }: { v: Vision }) {
     <Card>
       <CardHeader title="Vision" />
       <CardBody>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 gap-4" data-component="VisionBoxes">
           <div className="rounded-2xl border border-slate-300 bg-white p-4">
             <div className="font-semibold mb-2 text-slate-900">Legacy Vision (Seen By Others)</div>
             <div className="text-sm mb-3 text-slate-800">{safeText(v.legacy)}</div>
@@ -435,7 +435,7 @@ function PassionTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-component="PassionTab">
       <div className="flex gap-2 overflow-x-auto pb-1">
         {PASSION_NS.map((item) => (
           <Pill key={item.key} active={item.key === sel} onClick={() => setSel(item.key)}>
@@ -492,7 +492,7 @@ function PersonSection({ id, label }: { id: (typeof PERSON_SECTIONS)[number]["id
 
 function PersonTab() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-component="PersonSection">
       {PERSON_SECTIONS.map((sec) => (
         <PersonSection key={sec.id} id={sec.id} label={sec.label} />
       ))}
@@ -515,7 +515,7 @@ function PlayTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-component="PlayTab">
       {/* Pure Play */}
       <Card>
         <CardHeader title="Pure Play (Recharge)" />
@@ -585,7 +585,7 @@ function MiscTab() {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-component="MiscTab">
       {cats.map((c) => (
         <Card key={c}>
           <CardHeader
@@ -622,7 +622,7 @@ export default function PlannerPage() {
   const [tab, setTab] = useState<"Passion" | "Person" | "Play" | "Misc">("Passion");
 
   return (
-    <div className="skeleton-off p-4 md:p-6 max-w-[1200px] mx-auto space-y-4">
+    <div className="skeleton-off p-4 md:p-6 max-w-[1200px] mx-auto space-y-4" data-component="PlannerPage">
       {/* Hero */}
 <div className="rounded-3xl p-8 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-xl">
   <div className="flex items-center justify-between flex-wrap gap-4">
