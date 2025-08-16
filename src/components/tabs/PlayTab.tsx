@@ -7,19 +7,17 @@ import AidBoard from "../AidBoard";
 import ScoreBadge from "../ScoreBadge";
 
 /**
- * Play tab – includes Pure Play (recharge) and Skill Play (learning).
+ * Play tab – Pure Play stacked above Skill Play; Skill Play shows Direction → Vision → Tree.
  */
 export default function PlayTab() {
   const [selectedDir, setSelectedDir] = useState<string>("musician");
   const vision = useStore((state) => state.visions.find((v) => v.id === selectedDir));
 
   return (
-    <div className="space-y-4" data-component="PlayTab">
+    <div className="space-y-4">
       {/* Pure Play */}
-      <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
         <h3 className="font-semibold mb-2">Pure Play (Recharge)</h3>
-        <p className="text-sm mb-2">Pick your feature of the week and queue up fun activities.</p>
-        {/* Example of Feature of Week (JRN scoring) */}
         <div className="flex items-center gap-2">
           <span className="font-medium">Feature: Jam Session</span>
           <ScoreBadge scoring={{ joy: 5, restoration: 4, novelty: 3 }} />
@@ -34,9 +32,9 @@ export default function PlayTab() {
       </div>
 
       {/* Skill Play */}
-      <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
-        <h3 className="font-semibold mb-2">Skill Play (Learn & Showcase)</h3>
-        <div className="flex gap-2 overflow-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
+        <h3 className="font-semibold mb-2">Skill Play (Learn &amp; Showcase)</h3>
+        <div className="flex gap-2 overflow-auto mb-2">
           {["musician","photography","painting"].map((id) => (
             <button
               key={id}
@@ -49,7 +47,9 @@ export default function PlayTab() {
             </button>
           ))}
         </div>
-        {vision && <VisionBoxes vision={vision} />}
+
+        {/* Vision and tree for selected skill direction */}
+        <VisionBoxes vision={vision} />
         <GoalTree directionId={selectedDir} />
         <AidBoard tabId="play" />
       </div>

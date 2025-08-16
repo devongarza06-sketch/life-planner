@@ -35,17 +35,18 @@ export default function PersonSection({ section }: { section: { id: string; labe
 
   const [open, setOpen] = useState<boolean>(false);
   const [selected, setSelected] = useState<string>(directions[0]?.id || "");
-
   const vision = useStore((state) => state.visions.find((v) => v.id === selected));
 
   return (
-    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex justify-between items-center">
         <span className="font-semibold">{section.label}</span>
         <span className="text-xl">{open ? "−" : "+"}</span>
       </button>
+
       {open && (
         <div className="mt-2 space-y-3">
+          {/* Direction chips */}
           <div className="flex gap-2 overflow-auto">
             {directions.map((d) => (
               <button
@@ -59,8 +60,12 @@ export default function PersonSection({ section }: { section: { id: string; labe
               </button>
             ))}
           </div>
-          {vision && <VisionBoxes vision={vision} />}
+
+          {/* Vision and tree */}
+          <VisionBoxes vision={vision} />
           <GoalTree directionId={selected} />
+
+          {/* Per-section A/I/D board */}
           <AidBoard tabId={`person-${section.id}`} />
         </div>
       )}

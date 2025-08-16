@@ -6,7 +6,7 @@ import GoalTree from "../GoalTree";
 import AidBoard from "../AidBoard";
 
 /**
- * Passion tab – manages north‑star directions, vision boards, goal tree and AID board.
+ * Passion tab – North Star selector, Vision side-by-side, Tree centered, AID board.
  */
 const directions = [
   { id: "crna", label: "Become a CRNA" },
@@ -15,9 +15,10 @@ const directions = [
 
 export default function PassionTab() {
   const [selected, setSelected] = useState<string>(directions[0].id);
-  const visions = useStore((state) => state.visions.filter((v) => v.id === selected));
+  const vision = useStore((s) => s.visions.find((v) => v.id === selected));
+
   return (
-    <div className="space-y-4" data-component="PassionTab">
+    <div className="space-y-4">
       <div className="flex gap-2 overflow-auto pb-2">
         {directions.map((dir) => (
           <button
@@ -31,8 +32,14 @@ export default function PassionTab() {
           </button>
         ))}
       </div>
-      {visions.length > 0 && <VisionBoxes vision={visions[0]} />}
+
+      {/* Vision boxes side-by-side */}
+      <VisionBoxes vision={vision} />
+
+      {/* Family-style tree centered below */}
       <GoalTree directionId={selected} />
+
+      {/* A/I/D board */}
       <AidBoard tabId="passion" />
     </div>
   );

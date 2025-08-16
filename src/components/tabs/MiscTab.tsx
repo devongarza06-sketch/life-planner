@@ -1,11 +1,9 @@
 "use client";
 import { useState } from "react";
-import { useStore } from "@/state/useStore";
 import AidBoard from "../AidBoard";
-import ScoreBadge from "../ScoreBadge";
 
 /**
- * Misc tab – lists administrative categories with maintenance lists and mini-project boards.
+ * Misc tab – administrative categories with maintenance lists and mini-project boards.
  */
 export default function MiscTab() {
   const miscCategories = [
@@ -27,9 +25,9 @@ export default function MiscTab() {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3" data-component="MiscTab">
+    <div className="space-y-3">
       {miscCategories.map((cat) => (
-        <div key={cat.id} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
+        <div key={cat.id} className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
           <button
             onClick={() => setOpenCategory(openCategory === cat.id ? null : cat.id)}
             className="w-full flex justify-between items-center text-left"
@@ -47,7 +45,7 @@ export default function MiscTab() {
                 </ul>
               </div>
               <div>
-                <h4 className="font-semibold text-sm">Mini‑projects</h4>
+                <h4 className="font-semibold text-sm">Mini-projects</h4>
                 <AidBoard tabId={`misc-${cat.id}`} />
               </div>
             </div>

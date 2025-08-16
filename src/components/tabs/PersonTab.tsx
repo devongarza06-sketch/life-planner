@@ -2,7 +2,7 @@
 import PersonSection from "./person/PersonSection";
 
 /**
- * Person tab – shows five collapsible domains.
+ * Person tab – five collapsible domains. Each renders its own Direction → Vision → Tree and AID.
  */
 export default function PersonTab() {
   const sections = [
@@ -13,7 +13,7 @@ export default function PersonTab() {
     { id: "meaning", label: "Meaning" }
   ];
   return (
-    <div className="space-y-3" data-component="PersonTab">
+    <div className="space-y-3">
       {sections.map((sec) => (
         <PersonSection key={sec.id} section={sec} />
       ))}

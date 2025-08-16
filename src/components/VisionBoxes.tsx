@@ -2,13 +2,29 @@
 import { Vision } from "@/domain/types";
 
 /**
- * Displays legacy and personal vision statements side‑by‑side
+ * Displays legacy and personal vision statements side-by-side
  * with their corresponding value chips underneath.
+ * Accepts an optional vision and renders a placeholder if not defined yet.
  */
-export default function VisionBoxes({ vision }: { vision: Vision }) {
+export default function VisionBoxes({ vision }: { vision?: Vision }) {
+  if (!vision) {
+    return (
+      <div className="grid md:grid-cols-2 gap-3">
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+          <h3 className="font-medium mb-1">Legacy Vision</h3>
+          <p className="text-sm text-gray-500">No vision defined yet.</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+          <h3 className="font-medium mb-1">Personal Vision</h3>
+          <p className="text-sm text-gray-500">No vision defined yet.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid md:grid-cols-2 gap-3" data-component="VisionBoxes">
-      <div className="bg-surface-light dark:bg-surface-dark p-3 rounded-xl shadow">
+    <div className="grid md:grid-cols-2 gap-3">
+      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
         <h3 className="font-medium mb-1">Legacy Vision</h3>
         <p className="text-sm mb-2">{vision.legacyText || "Not set"}</p>
         <div className="flex flex-wrap gap-1">
@@ -19,7 +35,7 @@ export default function VisionBoxes({ vision }: { vision: Vision }) {
           ))}
         </div>
       </div>
-      <div className="bg-surface-light dark:bg-surface-dark p-3 rounded-xl shadow">
+      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
         <h3 className="font-medium mb-1">Personal Vision</h3>
         <p className="text-sm mb-2">{vision.personalText || "Not set"}</p>
         <div className="flex flex-wrap gap-1">

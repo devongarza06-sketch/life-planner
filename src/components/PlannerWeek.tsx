@@ -9,7 +9,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
 /**
- * Weekly calendar component allowing drag‑and‑drop of tasks.
+ * Weekly calendar component allowing drag-and-drop of tasks.
  */
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
@@ -25,7 +25,6 @@ export default function PlannerWeek() {
   const { tasks, updateTask, settings, init } = useStore();
 
   useEffect(() => {
-    // init the store on first mount
     init();
   }, [init]);
 
@@ -48,13 +47,13 @@ export default function PlannerWeek() {
   };
 
   return (
-    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 shadow" data-component="PlannerWeek">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
       <h2 className="text-lg font-semibold mb-2">Weekly Planner</h2>
       <DnDCalendar
         localizer={localizer}
         events={events}
         defaultView="week"
-        style={{ height: 450 }}
+        style={{ height: 460 }}
         step={settings?.snapMinutes || 15}
         timeslots={4}
         draggableAccessor={() => true}
@@ -63,7 +62,7 @@ export default function PlannerWeek() {
         onEventResize={onEventResize}
         eventPropGetter={() => ({
           style: {
-            backgroundColor: "rgb(var(--accent))",
+            backgroundColor: "var(--rbc-accent, #6C63FF)",
             borderRadius: "0.5rem",
             color: "white"
           }
