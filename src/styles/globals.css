@@ -25,6 +25,7 @@
 }
 
 
+
 :root {
   --accent: 108 99 255; /* rgb tuple for Tailwind inline styles if needed */
 }
@@ -53,7 +54,8 @@ html, body {
   padding: .25rem .75rem;
   border-radius: 9999px;
   border: 1px solid rgb(var(--lp-ring));
-  background: #fff;
+  background: transparent;
+  color: inherit;
 }
 
 .lp-pill--active {
@@ -61,6 +63,12 @@ html, body {
   border-color: rgb(var(--lp-accent));
   color: #fff;
   box-shadow: 0 8px 16px rgba(99,102,241,.25);
+}
+
+.lp-pill--ghost {
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border-color: rgba(255,255,255,.35);
 }
 
 .lp-chip {
@@ -95,8 +103,10 @@ html, body {
 .skeleton-off .text-white\/80 { color: #ffffff !important; }
 .skeleton-off [class*="opacity-"] { opacity: 1 !important; }
 
-/* Make headings crisp */
-.skeleton-off h1, .skeleton-off h2, .skeleton-off .font-semibold { color: #0f172a !important; }
+/* Make headings crisp (limit to actual headings so we don't crush white labels in dark cards) */
+.skeleton-off h1, .skeleton-off h2 { color: #0f172a !important; }
+/* Optional (light cards only): you can target headings inside .lp-card if needed
+.skeleton-off .lp-card h3, .skeleton-off .lp-card h4 { color: #0f172a !important; } */
 
 /* Improve default range slider visibility a bit */
 input[type="range"] {

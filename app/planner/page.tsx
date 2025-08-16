@@ -223,8 +223,8 @@ function BudgetScales() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl lp-h flex items-center gap-2"><span>🗓️</span> Weekly & Daily Scales</h2>
         <div className="flex gap-2">
-          <button className={`lp-pill ${mode === "week" ? "lp-pill--active" : "text-white/90 bg-white/10 border-white/20"}`} onClick={() => setMode("week")}>Week</button>
-          <button className={`lp-pill ${mode === "day" ? "lp-pill--active" : "text-white/90 bg-white/10 border-white/20"}`} onClick={() => setMode("day")}>Day</button>
+          <button className={`lp-pill ${mode === "week" ? "lp-pill--active" : "lp-pill--ghost"}`} onClick={() => setMode("week")}>Week</button>
+          <button className={`lp-pill ${mode === "day" ? "lp-pill--active" : "lp-pill--ghost"}`} onClick={() => setMode("day")}>Day</button>
         </div>
       </div>
       <p className="text-white/70 text-sm mt-2">Drag to allocate focus. Aim for 100%. Use Amplify to boost 1–2 buckets this week.</p>

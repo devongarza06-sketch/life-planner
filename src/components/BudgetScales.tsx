@@ -78,7 +78,7 @@ export default function BudgetScales() {
       <div className="mt-3 space-y-2">
         {categories.map((cat, idx) => (
           <div key={cat} className="flex items-center gap-3">
-            <span className="w-20 text-sm font-medium text-white">{cat}</span>
+            <span className="w-20 text-sm font-medium text-white drop-shadow-sm">{cat}</span>
             <input
               type="range"
               min={0}
