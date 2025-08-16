@@ -97,3 +97,8 @@ html, body {
 
 /* Make headings crisp */
 .skeleton-off h1, .skeleton-off h2, .skeleton-off .font-semibold { color: #0f172a !important; }
+
+/* Improve default range slider visibility a bit */
+input[type="range"] {
+  height: 0.5rem;
+}
