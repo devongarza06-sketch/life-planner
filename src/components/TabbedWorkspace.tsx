@@ -20,7 +20,7 @@ export default function TabbedWorkspace() {
 
   return (
     <div>
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b" data-component="TabbedWorkspace">
       {tabList.map((tab) => (
         <button
           key={tab.id}

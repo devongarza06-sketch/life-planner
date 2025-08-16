@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Dev HUD highlight styles ===== */
+.devhud-on [data-component] {
+  outline: 1px dashed rgba(108, 99, 255, 0.65);
+  outline-offset: 3px;
+  position: relative;
+}
+
+.devhud-on [data-component]::after {
+  content: attr(data-component);
+  position: absolute;
+  top: -0.9rem;
+  left: 0;
+  background: rgba(108, 99, 255, 0.9);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
 :root {
   --accent: 108 99 255; /* rgb tuple for Tailwind inline styles if needed */
 }

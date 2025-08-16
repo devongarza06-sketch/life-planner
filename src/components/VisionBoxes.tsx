@@ -7,7 +7,7 @@ import { Vision } from "@/domain/types";
  */
 export default function VisionBoxes({ vision }: { vision: Vision }) {
   return (
-    <div className="grid md:grid-cols-2 gap-3">
+    <div className="grid md:grid-cols-2 gap-3" data-component="VisionBoxes">
       <div className="bg-surface-light dark:bg-surface-dark p-3 rounded-xl shadow">
         <h3 className="font-medium mb-1">Legacy Vision</h3>
         <p className="text-sm mb-2">{vision.legacyText || "Not set"}</p>

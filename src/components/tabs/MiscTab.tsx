@@ -27,7 +27,7 @@ export default function MiscTab() {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-component="MiscTab">
       {miscCategories.map((cat) => (
         <div key={cat.id} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
           <button

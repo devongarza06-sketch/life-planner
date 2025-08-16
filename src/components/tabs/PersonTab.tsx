@@ -13,7 +13,7 @@ export default function PersonTab() {
     { id: "meaning", label: "Meaning" }
   ];
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-component="PersonTab">
       {sections.map((sec) => (
         <PersonSection key={sec.id} section={sec} />
       ))}

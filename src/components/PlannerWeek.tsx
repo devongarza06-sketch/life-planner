@@ -48,7 +48,7 @@ export default function PlannerWeek() {
   };
 
   return (
-    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 shadow">
+    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 shadow" data-component="PlannerWeek">
       <h2 className="text-lg font-semibold mb-2">Weekly Planner</h2>
       <DnDCalendar
         localizer={localizer}

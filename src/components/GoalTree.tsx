@@ -43,7 +43,7 @@ export default function GoalTree({ directionId }: GoalTreeProps) {
   };
 
   return (
-    <div className="mt-3">
+    <div className="mt-3" data-component="GoalTree">
       <h3 className="font-semibold mb-2">Goal Tree</h3>
       <div className="max-h-60 overflow-y-auto border rounded-xl p-2 bg-surface-light dark:bg-surface-dark">
         {renderNodes(".__root__")}

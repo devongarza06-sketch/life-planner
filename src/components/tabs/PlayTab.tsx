@@ -14,7 +14,7 @@ export default function PlayTab() {
   const vision = useStore((state) => state.visions.find((v) => v.id === selectedDir));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-component="PlayTab">
       {/* Pure Play */}
       <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow">
         <h3 className="font-semibold mb-2">Pure Play (Recharge)</h3>

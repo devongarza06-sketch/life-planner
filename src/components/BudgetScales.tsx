@@ -24,7 +24,7 @@ export default function BudgetScales() {
   };
 
   return (
-    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 shadow">
+    <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 shadow" data-component="BudgetScales">
       <h2 className="text-lg font-semibold mb-2">Time Budgets</h2>
       {categories.map((cat, idx) => (
         <div key={cat} className="flex items-center gap-3 py-1">

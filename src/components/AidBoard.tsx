@@ -44,7 +44,7 @@ function SortableCard({ card, columnId }: { card: BoardCard; columnId: ColumnId 
       {...listeners}
       className="bg-surface-light dark:bg-surface-dark rounded-xl p-2 mb-2 shadow cursor-grab"
       role="listitem"
-      aria-label={card.title}
+      aria-label={card.title} data-component="AidBoard"
     >
       <div className="font-medium text-sm">{card.title}</div>
       <ScoreBadge scoring={card.scoring} />

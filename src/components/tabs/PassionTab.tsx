@@ -17,7 +17,7 @@ export default function PassionTab() {
   const [selected, setSelected] = useState<string>(directions[0].id);
   const visions = useStore((state) => state.visions.filter((v) => v.id === selected));
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-component="PassionTab">
       <div className="flex gap-2 overflow-auto pb-2">
         {directions.map((dir) => (
           <button
