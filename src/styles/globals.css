@@ -2,11 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Calendar accent fallback */
+/* --- Root tokens --- */
 :root {
-  --rbc-accent: #6C63FF;
+  --lp-bg: #0b1020;
+  --lp-panel: #0e1326;
+  --lp-ring: #7c3aed;
+  --lp-accent: #8b5cf6;
+  --lp-accent2: #22d3ee;
+  --rbc-accent: #6C63FF; /* keep your calendar accent */
 }
 
-html, body, #__next {
-  height: 100%;
+html, body, #__next { height: 100%; }
+
+body { @apply bg-[var(--lp-bg)] text-slate-100 antialiased; }
+
+/* Selection highlight */
+::selection { background: rgba(139, 92, 246, .35); color: white; }
+
+/* --- Utilities --- */
+@layer components {
+  .lp-hero {
+    @apply rounded-3xl text-white shadow-lp-pop;
+    background-image: theme('backgroundImage.lp-hero');
+  }
+
+  .lp-card {
+    @apply rounded-2xl border border-white/10 shadow-lp-card backdrop-blur-12;
+    /* Background image + a faint white tint for the glass look */
+    background-image: theme('backgroundImage.lp-card');
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+
+  .lp-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium
+           bg-white/10 hover:bg-white/15 border border-white/15;
+  }
+
+  .lp-ring { @apply ring-1 ring-[var(--lp-ring)]/40; }
+  .lp-title { @apply text-2xl md:text-3xl font-bold tracking-tight; }
+  .lp-sub { @apply text-sm text-slate-300; }
 }
+
+/* Sliders look cleaner against dark */
+input[type="range"] { accent-color: var(--lp-accent); }
+
+/* Scrollbar minimalism for trees/panels */
+.lp-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.lp-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148,163,184,.35);
+  border-radius: 999px;
+}
+
+/* Sliders look cleaner against dark */
+input[type="range"] { accent-color: var(--lp-accent); }
+
+/* Scrollbar minimalism for trees/panels */
+.lp-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.lp-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .35); border-radius: 999px; }

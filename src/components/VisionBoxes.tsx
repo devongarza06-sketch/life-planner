@@ -5,33 +5,39 @@ export default function VisionBoxes({ vision }: { vision?: Vision }){
   if(!vision){
     return (
       <div className="grid md:grid-cols-2 gap-3">
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+        <div className="lp-card p-3">
           <h3 className="font-medium mb-1">Legacy Vision</h3>
-          <p className="text-sm text-gray-500">No vision defined yet.</p>
+          <p className="text-sm text-slate-400">No vision defined yet.</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+        <div className="lp-card p-3">
           <h3 className="font-medium mb-1">Personal Vision</h3>
-          <p className="text-sm text-gray-500">No vision defined yet.</p>
+          <p className="text-sm text-slate-400">No vision defined yet.</p>
         </div>
       </div>
     );
   }
+
   const legacyVals = vision.legacyValues || [];
   const personalVals = vision.personalValues || [];
+
   return (
     <div className="grid md:grid-cols-2 gap-3">
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+      <div className="lp-card p-3">
         <h3 className="font-medium mb-1">Legacy Vision</h3>
         <p className="text-sm mb-2">{vision.legacyText}</p>
         <div className="flex flex-wrap gap-1">
-          {legacyVals.map((val)=> (<span key={"l-"+val} className="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent">{val}</span>))}
+          {legacyVals.map((val)=> (
+            <span key={"l-"+val} className="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent">{val}</span>
+          ))}
         </div>
       </div>
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow">
+      <div className="lp-card p-3">
         <h3 className="font-medium mb-1">Personal Vision</h3>
         <p className="text-sm mb-2">{vision.personalText}</p>
         <div className="flex flex-wrap gap-1">
-          {personalVals.map((val)=> (<span key={"p-"+val} className="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent">{val}</span>))}
+          {personalVals.map((val)=> (
+            <span key={"p-"+val} className="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent">{val}</span>
+          ))}
         </div>
       </div>
     </div>
