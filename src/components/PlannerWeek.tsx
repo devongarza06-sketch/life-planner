@@ -1,73 +1,36 @@
 "use client";
-import { Calendar, dateFnsLocalizer } from "react-big-calendar";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import { format, parse, startOfWeek, getDay } from "date-fns";
-import { enUS } from "date-fns/locale";
 import { useStore } from "@/state/useStore";
-import { useEffect } from "react";
-import "react-big-calendar/lib/css/react-big-calendar.css";
-import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
-/**
- * Weekly calendar component allowing drag-and-drop of tasks.
- */
-const locales = { "en-US": enUS };
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 0 }),
-  getDay,
-  locales
-});
-const DnDCalendar = withDragAndDrop(Calendar);
+const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const todayIdx = new Date().getDay();
 
-export default function PlannerWeek() {
-  const { tasks, updateTask, settings, init } = useStore();
-
-  useEffect(() => {
-    init();
-  }, [init]);
-
-  const events = tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    start: new Date(task.start),
-    end: new Date(task.end),
-    resource: task
-  }));
-
-  const onEventDrop = ({ event, start, end }: any) => {
-    const updated = { ...event.resource, start: start.toISOString(), end: end.toISOString() };
-    updateTask(updated);
-  };
-
-  const onEventResize = ({ event, start, end }: any) => {
-    const updated = { ...event.resource, start: start.toISOString(), end: end.toISOString() };
-    updateTask(updated);
-  };
+export default function PlannerWeek(){
+  const { tasks } = useStore();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
-      <h2 className="text-lg font-semibold mb-2">Weekly Planner</h2>
-      <DnDCalendar
-        localizer={localizer}
-        events={events}
-        defaultView="week"
-        style={{ height: 460 }}
-        step={settings?.snapMinutes || 15}
-        timeslots={4}
-        draggableAccessor={() => true}
-        resizable
-        onEventDrop={onEventDrop}
-        onEventResize={onEventResize}
-        eventPropGetter={() => ({
-          style: {
-            backgroundColor: "var(--rbc-accent, #6C63FF)",
-            borderRadius: "0.5rem",
-            color: "white"
-          }
-        })}
-      />
+    <div className="mb-4 bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
+      <h3 className="font-semibold mb-2">Weekly Planner</h3>
+      <div className="grid grid-cols-7 gap-3">
+        {dayNames.map((d, idx)=> (
+          <div key={d} className={`rounded-2xl border p-3 min-h-[220px] ${idx===todayIdx? 'border-indigo-500 bg-indigo-50/40 dark:bg-gray-700/30':''}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-medium">{d}</div>
+              {idx===todayIdx && <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-600/30 dark:text-indigo-200">Today</span>}
+            </div>
+            <div className="space-y-2">
+              {tasks.filter(t=>t.day===idx).map(t=> (
+                <div key={t.id} className={`w-full text-left rounded-xl px-3 py-2 border ${t.fixed? 'bg-slate-100/80 dark:bg-gray-700/50':'bg-white dark:bg-gray-700'} hover:bg-slate-50 dark:hover:bg-gray-600`}>
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-gray-300">
+                    <span>{t.start}–{t.end}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-gray-600 dark:text-gray-100">{t.bucket}</span>
+                  </div>
+                  <div className="text-sm font-medium">{t.title}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

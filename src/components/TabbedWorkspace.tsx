@@ -1,86 +1,27 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import PassionTab from "./tabs/PassionTab";
 import PersonTab from "./tabs/PersonTab";
 import PlayTab from "./tabs/PlayTab";
 import MiscTab from "./tabs/MiscTab";
-/**
- * TabbedWorkspace
- * - Four top-level tabs with readable pills on a light background
- * - Renders your existing PassionTab, PersonTab, PlayTab, MiscTab
- * - Scoped styles so it won't be affected by global overrides
- */
 
-const tabList = [
-  { id: "passion", label: "Passion" },
-  { id: "person", label: "Person" },
-  { id: "play", label: "Play" },
-  { id: "misc", label: "Misc" },
-] as const;
-type TabId = (typeof tabList)[number]["id"];
+const TABS = ["Passion","Person","Play","Misc"] as const;
 
-export default function TabbedWorkspace() {
-  const [selectedTab, setSelectedTab] = React.useState<TabId>("passion");
-
+export default function TabbedWorkspace(){
+  const [tab, setTab] = useState<typeof TABS[number]>("Passion");
   return (
-    <div className="tw">
-      {/* Tab pills */}
-      <div className="tw-tabs" role="tablist" aria-label="Workspace Tabs">
-        {tabList.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={selectedTab === tab.id}
-            className={`pill ${selectedTab === tab.id ? "pill--active" : ""}`}
-            onClick={() => setSelectedTab(tab.id)}
-          >
-            {tab.label}
-          </button>
+    <div className="rounded-3xl border bg-white dark:bg-gray-800 shadow">
+      <div className="flex items-center gap-2 p-3 sticky top-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur z-10">
+        {TABS.map((t)=> (
+          <button key={t} onClick={()=>setTab(t)} className={`px-3 py-1 rounded-full border ${tab===t? 'bg-accent text-white border-accent shadow':'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>{t}</button>
         ))}
       </div>
-
-      {/* Active tab body */}
-      <div className="tw-body" role="tabpanel">
-        {selectedTab === "passion" && <PassionTab />}
-        {selectedTab === "person" && <PersonTab />}
-        {selectedTab === "play" && <PlayTab />}
-        {selectedTab === "misc" && <MiscTab />}
+      <div className="p-4 md:p-6">
+        {tab==='Passion' && <PassionTab/>}
+        {tab==='Person' && <PersonTab/>}
+        {tab==='Play' && <PlayTab/>}
+        {tab==='Misc' && <MiscTab/>}
       </div>
-
-      <style jsx>{`
-        .tw {
-          /* wrapper on light surface */
-        }
-        .tw-tabs {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-        }
-        .pill {
-          border: 1px solid #e5e7eb;
-          background: #f8fafc; /* slate-50 */
-          color: #0f172a; /* slate-900 */
-          border-radius: 9999px;
-          padding: 0.35rem 0.8rem;
-          font-weight: 600;
-          font-size: 0.9rem;
-          transition: background 120ms ease, color 120ms ease, border-color 120ms ease,
-            box-shadow 120ms ease;
-        }
-        .pill:hover {
-          background: #eef2ff; /* indigo-50 */
-          border-color: #c7d2fe;
-        }
-        .pill--active {
-          background: #6c63ff; /* accent */
-          border-color: #6c63ff;
-          color: #fff;
-          box-shadow: 0 8px 16px rgba(108, 99, 255, 0.25);
-        }
-        .tw-body {
-          padding-top: 1rem;
-        }
-      `}</style>
     </div>
   );
 }
