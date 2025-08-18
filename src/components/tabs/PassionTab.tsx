@@ -7,27 +7,40 @@ import AidBoard from "../AidBoard";
 
 const directions = [
   { id: "crna", label: "Become a CRNA" },
-  { id: "writer", label: "Become a Writer" }
+  { id: "writer", label: "Become a Writer" },
 ];
 
-export default function PassionTab(){
+export default function PassionTab() {
   const [selected, setSelected] = useState<string>(directions[0].id);
-  const vision = useStore((s)=> s.visions.find(v=>v.id===selected));
+  const vision = useStore((s) => s.visions.find((v) => v.id === selected));
 
   return (
     <div className="space-y-4">
       {/* Direction chips */}
       <div className="flex gap-2 overflow-auto">
-        {directions.map((d)=> (
-          <button key={d.id} onClick={()=>setSelected(d.id)} className={`whitespace-nowrap px-3 py-1 rounded-full ${selected===d.id? 'bg-accent text-white':'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-100'}`}>{d.label}</button>
+        {directions.map((d) => (
+          <button
+            key={d.id}
+            onClick={() => setSelected(d.id)}
+            className={`whitespace-nowrap px-3 py-1 rounded-full ${
+              selected === d.id
+                ? "bg-accent text-white"
+                : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-100"
+            }`}
+          >
+            {d.label}
+          </button>
         ))}
       </div>
       {/* Vision side-by-side */}
-      <VisionBoxes vision={vision}/>
+      <VisionBoxes vision={vision} />
       {/* Tree centered below */}
-      <GoalTree directionId={selected}/>
-      {/* A/I/D board */}
-      <AidBoard tabId="passion" />
+      <GoalTree directionId={selected} />
+      {/* A/I/D boards */}
+      <div className="space-y-4">
+        <AidBoard tabId="passion-annual" title="Annual Themes (12+ months)" rubricLabel="IART+G" />
+        <AidBoard tabId="passion-q" title="1–3 Month Goals" rubricLabel="IART+G" />
+      </div>
     </div>
   );
 }
