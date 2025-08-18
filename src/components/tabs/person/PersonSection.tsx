@@ -4,6 +4,7 @@ import { useStore } from "@/state/useStore";
 import VisionBoxes from "../../VisionBoxes";
 import GoalTree from "../../GoalTree";
 import AidBoard from "../../AidBoard";
+import ActiveQuarterGoals from "../../ActiveQuarterGoals";
 
 export default function PersonSection({ section }:{section:{id:string; label:string}}){
   // minimal: only physical has defined data in seeds (athlete)
@@ -31,6 +32,8 @@ export default function PersonSection({ section }:{section:{id:string; label:str
           <VisionBoxes vision={vision}/>
           <GoalTree directionId={selected}/>
           <AidBoard tabId={`person-${section.id}`} rubricLabel="UIE"/>
+          {/* NEW: 1–3 Month Active Goals — single card for person section */}
+          <ActiveQuarterGoals variant="person" sectionId={section.id} />
         </div>
       )}
     </div>

@@ -1,10 +1,16 @@
 "use client";
 import { useState } from "react";
 import { useStore } from "@/state/useStore";
-import VisionBoxes from "../VisionBoxes";
-import GoalTree from "../GoalTree";
-import AidBoard from "../AidBoard";
-import ScoreBadge from "../ScoreBadge";
+
+// Keep these paths relative to this folder.
+// If any of these live elsewhere, tell me the correct path and I’ll adjust.
+import VisionBoxes from "@/components/VisionBoxes";
+import GoalTree from "@/components/GoalTree";
+import AidBoard from "@/components/AidBoard";
+import ScoreBadge from "@/components/ScoreBadge";
+
+// NEW section for 1–3 Month Active Goals under Skill Play
+import ActiveQuarterGoals from "@/components/ActiveQuarterGoals";
 
 export default function PlayTab() {
   const [selectedDir, setSelectedDir] = useState<string>("musician");
@@ -12,7 +18,7 @@ export default function PlayTab() {
 
   return (
     <div className="space-y-4">
-      {/* Pure Play */}
+      {/* Pure Play (Recharge) */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
         <h3 className="font-semibold mb-2">Pure Play (Recharge)</h3>
         <div className="flex items-center gap-2">
@@ -29,9 +35,11 @@ export default function PlayTab() {
         </div>
       </div>
 
-      {/* Skill Play */}
+      {/* Skill Play (Learn & Showcase) */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
         <h3 className="font-semibold mb-2">Skill Play (Learn & Showcase)</h3>
+
+        {/* Direction chips */}
         <div className="flex gap-2 overflow-auto mb-2">
           {["musician", "photography", "painting"].map((id) => (
             <button
@@ -47,11 +55,20 @@ export default function PlayTab() {
             </button>
           ))}
         </div>
+
+        {/* North Star visuals */}
         <VisionBoxes vision={vision} />
         <GoalTree directionId={selectedDir} />
+
+        {/* AID boards */}
         <div className="space-y-4 mt-4">
           <AidBoard tabId="play-annual" title="Annual Themes (12+ months)" rubricLabel="JRN" />
           <AidBoard tabId="play-q" title="1–3 Month Goals" rubricLabel="JRN" />
+        </div>
+
+        {/* NEW: 1–3 Month Active Goals (per your screenshot) */}
+        <div className="mt-4">
+          <ActiveQuarterGoals />
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useStore } from "@/state/useStore";
-import VisionBoxes from "../VisionBoxes";
-import GoalTree from "../GoalTree";
-import AidBoard from "../AidBoard";
+import VisionBoxes from "@/components/VisionBoxes";
+import GoalTree from "@/components/GoalTree";
+import AidBoard from "@/components/AidBoard";
+import ActiveQuarterGoals from "@/components/ActiveQuarterGoals";
 
 const directions = [
   { id: "crna", label: "Become a CRNA" },
@@ -41,6 +42,8 @@ export default function PassionTab() {
         <AidBoard tabId="passion-annual" title="Annual Themes (12+ months)" rubricLabel="IART+G" />
         <AidBoard tabId="passion-q" title="1–3 Month Goals" rubricLabel="IART+G" />
       </div>
+      {/* NEW: 1–3 Month Active Goals cards */}
+      <ActiveQuarterGoals variant="passion" />
     </div>
   );
 }
