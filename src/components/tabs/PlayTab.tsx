@@ -1,75 +1,60 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/state/useStore";
-
-// Keep these paths relative to this folder.
-// If any of these live elsewhere, tell me the correct path and I’ll adjust.
+import NorthStarBar from "@/components/NorthStarBar";
 import VisionBoxes from "@/components/VisionBoxes";
 import GoalTree from "@/components/GoalTree";
-import AidBoard from "@/components/AidBoard";
-import ScoreBadge from "@/components/ScoreBadge";
-
-// NEW section for 1–3 Month Active Goals under Skill Play
-import ActiveQuarterGoals from "@/components/ActiveQuarterGoals";
+import { useStore } from "@/state/useStore";
 
 export default function PlayTab() {
-  const [selectedDir, setSelectedDir] = useState<string>("musician");
-  const vision = useStore((s) => s.visions.find((v) => v.id === selectedDir));
+  const { selected } = useStore();
+  const directionId = selected.play ?? null;
 
   return (
-    <div className="space-y-4">
-      {/* Pure Play (Recharge) */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
-        <h3 className="font-semibold mb-2">Pure Play (Recharge)</h3>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Feature: Board-game night</span>
-          <ScoreBadge scoring={{ joy: 5, restoration: 4, novelty: 3 }} />
-        </div>
-        <div className="mt-2">
-          <h4 className="font-semibold text-sm">Play Queue</h4>
-          <ul className="list-disc pl-5 text-sm">
-            <li>Hike with friends</li>
-            <li>Museum afternoon</li>
-            <li>Pottery intro</li>
-          </ul>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* Pure Play stays as-is above */}
 
       {/* Skill Play (Learn & Showcase) */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
-        <h3 className="font-semibold mb-2">Skill Play (Learn & Showcase)</h3>
+      <div className="space-y-4">
+        <NorthStarBar tab="play" />
+        <VisionBoxes tab="play" />
+        <GoalTree directionId={directionId ?? ""} />
 
-        {/* Direction chips */}
-        <div className="flex gap-2 overflow-auto mb-2">
-          {["musician", "photography", "painting"].map((id) => (
-            <button
-              key={id}
-              onClick={() => setSelectedDir(id)}
-              className={`whitespace-nowrap px-3 py-1 rounded-full ${
-                selectedDir === id
-                  ? "bg-accent text-white"
-                  : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-100"
-              }`}
-            >
-              {id.charAt(0).toUpperCase() + id.slice(1)}
-            </button>
-          ))}
-        </div>
+        {/* AID boards & 1–3 Month Active (visual shells) */}
+        <section className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-4">
+          <header className="flex items-center justify-between">
+            <h3 className="font-semibold">Annual Themes (12+ months)</h3>
+            <span className="text-xs text-slate-400">Rubric: IART+G</span>
+          </header>
+          <div className="grid md:grid-cols-3 gap-3 mt-3">
+            {["Active", "Incubating", "Dormant"].map((col) => (
+              <div key={col} className="rounded-xl border border-slate-700/60 p-3">
+                <div className="font-medium mb-2">{col}</div>
+                <div className="text-sm text-slate-400">No items yet.</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        {/* North Star visuals */}
-        <VisionBoxes vision={vision} />
-        <GoalTree directionId={selectedDir} />
+        <section className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-4">
+          <header className="flex items-center justify-between">
+            <h3 className="font-semibold">1–3 Month Goals</h3>
+            <span className="text-xs text-slate-400">Rubric: JRN</span>
+          </header>
+          <div className="grid md:grid-cols-3 gap-3 mt-3">
+            {["Active", "Incubating", "Dormant"].map((col) => (
+              <div key={col} className="rounded-xl border border-slate-700/60 p-3">
+                <div className="font-medium mb-2">{col}</div>
+                <div className="text-sm text-slate-400">No items yet.</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        {/* AID boards */}
-        <div className="space-y-4 mt-4">
-          <AidBoard tabId="play-annual" title="Annual Themes (12+ months)" rubricLabel="JRN" />
-          <AidBoard tabId="play-q" title="1–3 Month Goals" rubricLabel="JRN" />
-        </div>
-
-        {/* NEW: 1–3 Month Active Goals (per your screenshot) */}
-        <div className="mt-4">
-          <ActiveQuarterGoals />
-        </div>
+        <section className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-4">
+          <h3 className="font-semibold mb-2">1–3 Month Active Goal</h3>
+          <div className="text-sm text-slate-400">
+            Select the active Skill Play goal to see its weekly/daily breakdown.
+          </div>
+        </section>
       </div>
     </div>
   );

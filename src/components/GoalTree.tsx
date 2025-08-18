@@ -4,10 +4,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/state/useStore";
 import { GoalNode } from "@/domain/types";
 import { MoreHorizontal } from "lucide-react";
+import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
-/**
- * Render-only node shape
- */
 type RenderNode = {
   id: string;
   title: string;
@@ -17,7 +16,6 @@ type RenderNode = {
   smartier?: string;
   lead?: string;
   lag?: string;
-  horizon?: string;
   children: RenderNode[];
 };
 
@@ -36,17 +34,15 @@ function buildTree(goals: GoalNode[], directionId: string): RenderNode | null {
     directionId: (g as any).directionId,
     parentId: (g as any).parentId ?? null,
     type: (g as any).type,
-    smartier: (g as any).smartier ?? (g as any).smart ?? undefined,
+    smartier: (g as any).smartier ?? undefined,
     lead: (g as any).lead ?? undefined,
     lag: (g as any).lag ?? undefined,
-    horizon: (g as any).horizon ?? undefined,
     children: (byParent[(g as any).id] || []).map(toNode),
   });
 
   return toNode(roots[0]);
 }
 
-/** Utility: throttle rAF measure/update */
 function useRafUpdate(cb: () => void) {
   const raf = useRef<number | null>(null);
   const schedule = () => {
@@ -62,7 +58,6 @@ function useRafUpdate(cb: () => void) {
   return schedule;
 }
 
-/** Connector geometry for a row of children */
 type RowGeom = {
   barLeft: number;
   barWidth: number;
@@ -73,14 +68,12 @@ type RowGeom = {
 export default function GoalTree({ directionId }: { directionId: string }) {
   const { goals } = useStore();
   const tree = useMemo(() => buildTree(goals, directionId), [goals, directionId]);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+  const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+  const toggleDetails = (id: string) => setOpenDetails((o) => ({ ...o, [id]: !o[id] }));
 
   if (!tree) {
     return (
-      <div className="text-sm text-slate-400 text-center">
-        No goals found for this direction yet.
-      </div>
+      <div className="text-sm text-slate-400 text-center">No goals found for this direction yet.</div>
     );
   }
 
@@ -88,7 +81,12 @@ export default function GoalTree({ directionId }: { directionId: string }) {
     <div className="mt-3">
       <h3 className="font-semibold mb-2 text-center">Connected Tree (Family-style)</h3>
       <div className="relative mx-auto max-w-5xl max-h-[420px] overflow-auto p-6 rounded-xl bg-slate-800/40">
-        <TreeNode node={tree} open={open} toggle={toggle} depth={0} />
+        <TreeNode
+          node={tree}
+          depth={0}
+          openDetails={openDetails}
+          onToggleDetails={toggleDetails}
+        />
       </div>
     </div>
   );
@@ -96,35 +94,55 @@ export default function GoalTree({ directionId }: { directionId: string }) {
 
 function TreeNode({
   node,
-  open,
-  toggle,
   depth,
+  openDetails,
+  onToggleDetails,
 }: {
   node: RenderNode;
-  open: Record<string, boolean>;
-  toggle: (id: string) => void;
   depth: number;
+  openDetails: Record<string, boolean>;
+  onToggleDetails: (id: string) => void;
 }) {
-  const isOpen = !!open[node.id];
-  const hasChildren = Array.isArray(node.children) && node.children.length > 0 && depth < 3;
+  const isOpen = !!openDetails[node.id];
+  const hasChildren = node.children.length > 0 && depth < 6;
 
-  // Refs for geometry
-  const wrapRef = useRef<HTMLDivElement | null>(null); // container of parent + children
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const parentRef = useRef<HTMLDivElement | null>(null);
   const childRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [geom, setGeom] = useState<RowGeom | null>(null);
 
-  // Recompute connector geometry when layout changes
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [draft, setDraft] = useState({
+    title: "",
+    smartier: "",
+    lead: "",
+    lag: "",
+  });
+
+  const { updateGoal, addChildGoal, addSiblingGoal, removeGoalCascade, goals } = useStore();
+
+  useEffect(() => {
+    if (!editOpen) return;
+    const current = goals.find((g) => g.id === node.id);
+    setDraft({
+      title: current?.title ?? "",
+      smartier: (current as any)?.smartier ?? "",
+      lead: (current as any)?.lead ?? "",
+      lag: (current as any)?.lag ?? "",
+    });
+  }, [editOpen, node.id, goals]);
+
   const schedule = useRafUpdate(() => {
     if (!wrapRef.current || !parentRef.current) return;
     const wrapRect = wrapRef.current.getBoundingClientRect();
     const pRect = parentRef.current.getBoundingClientRect();
     const parentX = pRect.left - wrapRect.left + pRect.width / 2;
 
-    const childKeys = node.children?.map((c) => c.id) || [];
     const xs: number[] = [];
-    childKeys.forEach((id) => {
-      const el = childRefs.current[id];
+    node.children.forEach((c) => {
+      const el = childRefs.current[c.id];
       if (el) {
         const r = el.getBoundingClientRect();
         xs.push(r.left - wrapRect.left + r.width / 2);
@@ -145,27 +163,77 @@ function TreeNode({
     }
   });
 
-  useLayoutEffect(schedule, [node.children?.length, isOpen]); // run after render
+  useLayoutEffect(schedule, [node.children.length, isOpen]);
   useEffect(() => {
     const onResize = () => schedule();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [schedule]);
 
+  const isRoot = node.parentId == null;
+
   return (
     <div ref={wrapRef} className="relative flex flex-col items-center">
-      {/* PARENT NODE */}
+      {/* Node pill */}
       <div ref={parentRef} className="relative">
         <div className="relative px-3 py-1 rounded-full bg-indigo-500 text-white text-sm shadow-sm select-none">
           {node.title}
-          {/* Ellipsis INSIDE the pill, bottom-right, small */}
+
+          {/* Ellipsis menu button (inside pill) */}
           <button
-            onClick={() => toggle(node.id)}
-            aria-label="Toggle details"
+            onClick={() => setMenuOpen((x) => !x)}
+            aria-label="Open menu"
             className="absolute bottom-0 right-1 translate-y-1/2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/90 text-slate-700 shadow ring-1 ring-slate-200 hover:bg-white focus:outline-none"
           >
             <MoreHorizontal size={10} />
           </button>
+
+          {/* Menu */}
+          {menuOpen && (
+            <div
+              className="absolute z-10 right-0 top-[120%] w-44 rounded-md border border-slate-200 bg-white shadow-lg text-sm text-slate-800"
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              <button
+                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setEditOpen(true);
+                }}
+              >
+                Edit…
+              </button>
+              <button
+                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                onClick={() => {
+                  addChildGoal(node.id, "New sub‑goal");
+                  setMenuOpen(false);
+                }}
+              >
+                Add sub‑goal
+              </button>
+              {!isRoot && (
+                <button
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                  onClick={() => {
+                    addSiblingGoal(node.id, "New peer goal");
+                    setMenuOpen(false);
+                  }}
+                >
+                  Add sibling
+                </button>
+              )}
+              <button
+                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                onClick={() => {
+                  onToggleDetails(node.id);
+                  setMenuOpen(false);
+                }}
+              >
+                {isOpen ? "Hide details" : "Show details"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* SMARTIER detail */}
@@ -181,54 +249,33 @@ function TreeNode({
                 Lead: {node.lead ?? "—"} • Lag: {node.lag ?? "—"}
               </div>
             )}
-            {node.horizon && <div>Horizon: {node.horizon}</div>}
           </div>
         )}
       </div>
 
-      {/* CHILDREN ROW + CONNECTORS */}
+      {/* Children connectors */}
       {hasChildren && (
         <div className="relative w-full mt-8">
-          {/* connectors layer */}
           {geom && (
             <>
-              {/* vertical from parent to bar */}
               <div
                 className="pointer-events-none absolute bg-slate-300"
-                style={{
-                  left: `${geom.parentX - 0.5}px`,
-                  top: "-24px",
-                  width: "1px",
-                  height: "24px",
-                }}
+                style={{ left: `${geom.parentX - 0.5}px`, top: "-24px", width: "1px", height: "24px" }}
               />
-              {/* horizontal bar spanning first..last child centers */}
               <div
                 className="pointer-events-none absolute bg-slate-300"
-                style={{
-                  left: `${geom.barLeft}px`,
-                  top: "0px",
-                  width: `${Math.max(1, geom.barWidth)}px`,
-                  height: "1px",
-                }}
+                style={{ left: `${geom.barLeft}px`, top: "0px", width: `${Math.max(1, geom.barWidth)}px`, height: "1px" }}
               />
-              {/* stubs down to each child center */}
               {geom.childXs.map((x, i) => (
                 <div
                   key={`stub-${i}`}
                   className="pointer-events-none absolute bg-slate-300"
-                  style={{
-                    left: `${x - 0.5}px`,
-                    top: "0px",
-                    width: "1px",
-                    height: "24px",
-                  }}
+                  style={{ left: `${x - 0.5}px`, top: "0px", width: "1px", height: "24px" }}
                 />
               ))}
             </>
           )}
 
-          {/* children nodes */}
           <div className="mt-6 w-full flex justify-center gap-8">
             {node.children.map((c) => (
               <div
@@ -238,12 +285,111 @@ function TreeNode({
                 }}
                 className="relative flex flex-col items-center"
               >
-                <TreeNode node={c} open={open} toggle={toggle} depth={depth + 1} />
+                <TreeNode
+                  node={c}
+                  depth={depth + 1}
+                  openDetails={openDetails}
+                  onToggleDetails={onToggleDetails}
+                />
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Edit modal */}
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title={`Edit Goal — ${node.title}`}
+        actions={
+          <>
+            {!isRoot && (
+              <button
+                onClick={() => setConfirmDel(true)}
+                className="mr-auto px-3 py-1.5 rounded border border-red-600 text-red-700 hover:bg-red-50"
+              >
+                Delete…
+              </button>
+            )}
+            <button
+              onClick={() => setEditOpen(false)}
+              className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                updateGoal(node.id, {
+                  title: draft.title,
+                  smartier: draft.smartier,
+                  lead: draft.lead,
+                  lag: draft.lag,
+                });
+                setEditOpen(false);
+              }}
+              className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              Save
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-slate-800">
+          <div>
+            <div className="text-xs text-slate-600 mb-1">Title</div>
+            <input
+              value={draft.title}
+              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              className="w-full rounded border p-2 text-sm text-slate-900"
+              placeholder="Goal title"
+            />
+          </div>
+          <div>
+            <div className="text-xs text-slate-600 mb-1">SMARTIER</div>
+            <textarea
+              value={draft.smartier}
+              onChange={(e) => setDraft((d) => ({ ...d, smartier: e.target.value }))}
+              className="w-full min-h-[80px] rounded border p-2 text-sm text-slate-900"
+              placeholder="Specific, Measurable, …"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs text-slate-600 mb-1">Lead metric</div>
+              <input
+                value={draft.lead}
+                onChange={(e) => setDraft((d) => ({ ...d, lead: e.target.value }))}
+                className="w-full rounded border p-2 text-sm text-slate-900"
+                placeholder="e.g., sessions/week"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-slate-600 mb-1">Lag metric</div>
+              <input
+                value={draft.lag}
+                onChange={(e) => setDraft((d) => ({ ...d, lag: e.target.value }))}
+                className="w-full rounded border p-2 text-sm text-slate-900"
+                placeholder="e.g., performance outcome"
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm delete */}
+      <ConfirmDialog
+        open={confirmDel}
+        title="Delete goal?"
+        message={`Are you sure you want to delete “${node.title}” and all of its sub‑goals?`}
+        onCancel={() => setConfirmDel(false)}
+        onConfirm={() => {
+          removeGoalCascade(node.id);
+          setConfirmDel(false);
+          setEditOpen(false);
+        }}
+        confirmText="Delete"
+      />
     </div>
   );
 }

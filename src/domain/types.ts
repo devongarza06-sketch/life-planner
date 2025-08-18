@@ -4,6 +4,7 @@
  */
 
 export type BoardStatus = 'active' | 'incubating' | 'dormant';
+export type TabId = 'passion' | 'person' | 'play';
 
 export interface UserPrefs {
   theme: 'light' | 'dark';
@@ -31,9 +32,9 @@ export type GoalType = 'northStar' | 'goal' | 'quarterGoal' | 'monthGoal';
 
 export interface GoalNode {
   id: string;
-  tabId: 'passion' | 'person' | 'play';    // grouping for boards
-  directionId: string;                      // ties to Vision.id
-  parentId?: string | null;                 // null for root (north star)
+  tabId: TabId;                          // grouping for boards
+  directionId: string;                   // ties to Vision.id
+  parentId?: string | null;              // null for root (north star)
   type: GoalType;
   title: string;
   smartier?: string;
