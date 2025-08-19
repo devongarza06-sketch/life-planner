@@ -68,7 +68,7 @@ export default function PlayTab() {
           columns={["Active (1)", "Incubating (≤3)", "Dormant (∞)"]}
         />
 
-        <Active13Panel tabKey="play-13" title="1–3 Month Active Goal" />
+        <Active13Panel tab="play" title="1–3 Month Active Goal" />
       </section>
     </div>
   );

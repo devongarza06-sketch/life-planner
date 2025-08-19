@@ -2,9 +2,32 @@
 import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import { useStore } from "@/state/useStore";
-import type { GoalNode } from "@/domain/types";
+import type {
+  GoalNode,
+  ActionTemplate,
+  Milestone,
+  OPISMIT,
+  OCvEDaR,
+} from "@/domain/types";
 
-const splitLines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
+const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const newAction = (): ActionTemplate => ({
+  key: Math.random().toString(36).slice(2, 9),
+  label: "New action",
+  durationMin: 30,
+  mode: "specific",
+  day: 1,
+  start: null,
+  ifThenYet: "",
+  rationale: "",
+});
+
+const newMilestone = (): Milestone => ({
+  key: Math.random().toString(36).slice(2, 9),
+  label: "New milestone",
+  target: "",
+});
 
 export default function Active13EditModal() {
   const {
@@ -12,68 +35,72 @@ export default function Active13EditModal() {
     updateGoal,
     openActive13ForGoalId,
     setOpenActive13ForGoalId,
+    generatePlannerActionsForWeek, // if not in store, you can remove the call below
   } = useStore();
 
   const goal = goals.find((g) => g.id === openActive13ForGoalId);
 
-  const [draft, setDraft] = useState<Partial<GoalNode> & {
-    weeklyText?: string;
-    dailyText?: string;
-    oc?: { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string };
-    op?: { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string };
-  }>({});
+  const [actions, setActions] = useState<ActionTemplate[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [ocvedar, setOCVEDAR] = useState<OCvEDaR>({});
+  const [opismit, setOPISMIT] = useState<OPISMIT>({});
 
   useEffect(() => {
     if (!goal) return;
-    setDraft({
-      lead: goal.lead ?? "",
-      lag: goal.lag ?? "",
-      weeklyText: (goal.weekly || []).join("\n"),
-      dailyText: (goal.daily || []).join("\n"),
-      ifThenYet: goal.ifThenYet ?? "",
-      rationale: goal.rationale ?? "",
-      oc: {
-        O: goal.ocvedar?.O || "", C: goal.ocvedar?.C || "",
-        V: goal.ocvedar?.V || "", E: goal.ocvedar?.E || "",
-        D: goal.ocvedar?.D || "", A: goal.ocvedar?.A || "",
-        R: goal.ocvedar?.R || "",
-      },
-      op: {
-        O: goal.opismit?.O || "", P: goal.opismit?.P || "",
-        I: goal.opismit?.I || "", S: goal.opismit?.S || "",
-        M: goal.opismit?.M || "", I2: goal.opismit?.I2 || "",
-        T: goal.opismit?.T || "",
-      },
-    });
+    setActions(goal.actionsTemplate || []);
+    setMilestones(goal.milestones || []);
+    setOCVEDAR(goal.ocvedar || {});
+    setOPISMIT(goal.opismit || {});
   }, [goal]);
 
   const onClose = () => setOpenActive13ForGoalId(null);
+
   const onSave = () => {
     if (!goal) return;
-    const patch: Partial<GoalNode> = {
-      lead: (draft.lead || "").trim() || undefined,
-      lag: (draft.lag || "").trim() || undefined,
-      weekly: splitLines(draft.weeklyText || ""),
-      daily: splitLines(draft.dailyText || ""),
-      ifThenYet: (draft.ifThenYet || "").trim() || undefined,
-      rationale: (draft.rationale || "").trim() || undefined,
-      ocvedar: { ...(draft.oc || {}) },
-      opismit: { ...(draft.op || {}) },
-    };
-    updateGoal(goal.id, patch);
+
+    const sanitize = (arr: ActionTemplate[]) =>
+      arr.map((a) => {
+        const x = { ...a };
+        x.durationMin = Math.max(1, Math.min(59, Math.round(x.durationMin || 30)));
+        if (x.mode === "specific") {
+          x.frequencyPerWeek = undefined;
+          x.preferredDays = undefined;
+          x.preferredStart = undefined;
+        } else {
+          x.day = undefined;
+          if (!Array.isArray(x.preferredDays)) x.preferredDays = [];
+        }
+        return x;
+      });
+
+    updateGoal(goal.id, {
+      actionsTemplate: sanitize(actions),
+      milestones,
+      ocvedar,
+      opismit,
+    });
+
+    // Optional: regenerate this week's planner instances if your store exposes it.
+    try {
+      // @ts-ignore optional in some repos
+      generatePlannerActionsForWeek?.();
+    } catch {}
+
     onClose();
   };
+
+  if (!goal) return null;
 
   return (
     <Modal
       open={!!goal}
       onClose={onClose}
-      title={goal ? `1–3 Details: ${goal.title}` : "1–3 Details"}
+      title={`1–3 Details: ${goal.title}`}
       actions={
         <>
           <button
             onClick={onClose}
-            className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+            className="px-3 py-1.5 rounded border border-slate-500 text-slate-100 bg-slate-700 hover:bg-slate-600"
           >
             Cancel
           </button>
@@ -86,106 +113,343 @@ export default function Active13EditModal() {
         </>
       }
     >
-      {!goal ? null : (
-        <div className="space-y-3 text-slate-800">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Lead metric</div>
-              <input
-                value={draft.lead ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, lead: e.target.value }))}
-                className="w-full rounded border p-2 text-sm"
-                placeholder="e.g., sessions/week"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Lag metric</div>
-              <input
-                value={draft.lag ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, lag: e.target.value }))}
-                className="w-full rounded border p-2 text-sm"
-                placeholder="e.g., desired outcome"
-              />
-            </div>
+      <div className="space-y-6 text-slate-100">
+        {/* Actions */}
+        <section className="rounded border border-slate-700 bg-slate-900/40 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">Actions</div>
+            <button
+              onClick={() => setActions((a) => [...a, newAction()])}
+              className="text-sm rounded px-2 py-1 border border-slate-600 hover:bg-slate-800"
+            >
+              + Add action
+            </button>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Weekly milestones (one per line)</div>
-              <textarea
-                value={draft.weeklyText ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, weeklyText: e.target.value }))}
-                className="w-full h-24 rounded border p-2 text-sm"
-                placeholder={"Watch 3 lectures\nOutline ch.3"}
-              />
+          {actions.length === 0 ? (
+            <div className="text-sm text-slate-400">No actions yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {actions.map((a, idx) => (
+                <ActionRow
+                  key={a.key}
+                  value={a}
+                  idx={idx + 1}
+                  onChange={(v) =>
+                    setActions((list) => list.map((x) => (x.key === a.key ? v : x)))
+                  }
+                  onRemove={() =>
+                    setActions((list) => list.filter((x) => x.key !== a.key))
+                  }
+                />
+              ))}
             </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Daily tasks & habits (one per line)</div>
-              <textarea
-                value={draft.dailyText ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, dailyText: e.target.value }))}
-                className="w-full h-24 rounded border p-2 text-sm"
-                placeholder={"45-min deep block\n15-min review"}
-              />
-            </div>
+          )}
+        </section>
+
+        {/* Milestones */}
+        <section className="rounded border border-slate-700 bg-slate-900/40 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">Milestones (metrics)</div>
+            <button
+              onClick={() => setMilestones((m) => [...m, newMilestone()])}
+              className="text-sm rounded px-2 py-1 border border-slate-600 hover:bg-slate-800"
+            >
+              + Add milestone
+            </button>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">If–Then / Yet Map</div>
-              <textarea
-                value={(draft as any).ifThenYet ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, ifThenYet: e.target.value }))}
-                className="w-full h-20 rounded border p-2 text-sm"
-                placeholder="If shift runs late → do 20-min night review."
-              />
-            </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Rationale</div>
-              <textarea
-                value={draft.rationale ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, rationale: e.target.value }))}
-                className="w-full h-20 rounded border p-2 text-sm"
-                placeholder="Why this matters now."
-              />
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="rounded border p-2">
-              <div className="text-xs font-medium mb-2">O‑C‑V‑E‑D‑A‑R</div>
-              {(["O","C","V","E","D","A","R"] as const).map((k) => (
-                <div key={k} className="mb-2">
-                  <label className="text-xs mr-2 w-4 inline-block font-semibold">{k}:</label>
+          {milestones.length === 0 ? (
+            <div className="text-sm text-slate-400">No milestones yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {milestones.map((m) => (
+                <div key={m.key} className="grid grid-cols-3 gap-2 items-center">
                   <input
-                    className="w-[85%] rounded border p-1 text-sm"
-                    value={(draft as any).oc?.[k] ?? ""}
+                    className="rounded border border-slate-600 bg-slate-800 p-2 text-sm"
+                    placeholder="Label"
+                    value={m.label}
                     onChange={(e) =>
-                      setDraft((d) => ({ ...d, oc: { ...(d.oc || {}), [k]: e.target.value } }))
+                      setMilestones((list) =>
+                        list.map((x) =>
+                          x.key === m.key ? { ...x, label: e.target.value } : x
+                        )
+                      )
                     }
                   />
+                  <input
+                    className="rounded border border-slate-600 bg-slate-800 p-2 text-sm"
+                    placeholder="Target (e.g., 20k words or 4 reps)"
+                    value={m.target || ""}
+                    onChange={(e) =>
+                      setMilestones((list) =>
+                        list.map((x) =>
+                          x.key === m.key ? { ...x, target: e.target.value } : x
+                        )
+                      )
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="rounded border border-slate-600 bg-slate-800 p-2 text-sm w-full"
+                      placeholder="Due week (YYYY-WW or W+3)"
+                      value={m.dueWeek || ""}
+                      onChange={(e) =>
+                        setMilestones((list) =>
+                          list.map((x) =>
+                            x.key === m.key ? { ...x, dueWeek: e.target.value } : x
+                          )
+                        )
+                      }
+                    />
+                    <button
+                      onClick={() =>
+                        setMilestones((list) => list.filter((x) => x.key !== m.key))
+                      }
+                      className="text-sm rounded px-2 py-1 border border-red-500 text-red-300 hover:bg-red-900/20"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
+          )}
+        </section>
 
-            <div className="rounded border p-2">
-              <div className="text-xs font-medium mb-2">O‑P‑I‑S‑M‑I‑T</div>
-              {(["O","P","I","S","M","I2","T"] as const).map((k) => (
-                <div key={k} className="mb-2">
-                  <label className="text-xs mr-2 w-6 inline-block font-semibold">{k}:</label>
-                  <input
-                    className="w-[83%] rounded border p-1 text-sm"
-                    value={(draft as any).op?.[k] ?? ""}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, op: { ...(d.op || {}), [k]: e.target.value } }))
-                    }
-                  />
-                </div>
+        {/* Framework editors */}
+        <section className="rounded border border-slate-700 bg-slate-900/40 p-3">
+          <div className="font-semibold mb-2">Problem‑solving & Experimentation</div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <FrameworkGrid
+              title="O‑C‑V‑E‑D‑A‑R"
+              fields={[
+                ["O", "Objective"],
+                ["C", "Constraints"],
+                ["V", "Variables"],
+                ["E", "Experimental design"],
+                ["D", "Data & math plan"],
+                ["A", "Analysis"],
+                ["R", "Reflect & iterate"],
+              ]}
+              value={ocvedar}
+              onChange={setOCVEDAR}
+            />
+            <FrameworkGrid
+              title="O‑P‑I‑S‑M‑I‑T"
+              fields={[
+                ["O", "Observe (calibration)"],
+                ["P", "Pattern & predict"],
+                ["I", "Intent, incentives & constraints"],
+                ["S", "System map"],
+                ["M", "Meta‑rotation"],
+                ["I2", "Ideate"],
+                ["T", "Test & tighten"],
+              ]}
+              value={opismit}
+              onChange={setOPISMIT}
+            />
+          </div>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function ActionRow({
+  value,
+  onChange,
+  onRemove,
+  idx,
+}: {
+  value: ActionTemplate;
+  onChange: (v: ActionTemplate) => void;
+  onRemove: () => void;
+  idx: number;
+}) {
+  return (
+    <div className="rounded border border-slate-600 bg-slate-800 p-2">
+      <div className="flex items-center justify-between">
+        <div className="font-medium">Action {idx}</div>
+        <button
+          onClick={onRemove}
+          className="text-sm rounded px-2 py-1 border border-red-500 text-red-300 hover:bg-red-900/20"
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-2 mt-2">
+        <input
+          className="rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+          placeholder="Label"
+          value={value.label}
+          onChange={(e) => onChange({ ...value, label: e.target.value })}
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">Duration</span>
+          <input
+            className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-24"
+            type="number"
+            min={1}
+            max={59}
+            value={value.durationMin}
+            onChange={(e) => onChange({ ...value, durationMin: +e.target.value })}
+          />
+          <span className="text-xs text-slate-400">min</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">Mode</span>
+          <select
+            className="rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+            value={value.mode}
+            onChange={(e) => onChange({ ...value, mode: e.target.value as any })}
+          >
+            <option value="specific">Specific</option>
+            <option value="frequency">Frequency</option>
+          </select>
+        </div>
+      </div>
+
+      {value.mode === "specific" ? (
+        <div className="grid md:grid-cols-3 gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Day</span>
+            <select
+              className="rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+              value={value.day ?? 1}
+              onChange={(e) => onChange({ ...value, day: +e.target.value as any })}
+            >
+              {DAY.map((d, i) => (
+                <option key={i} value={i}>
+                  {d}
+                </option>
               ))}
-            </div>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Time</span>
+            <input
+              className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-28"
+              type="time"
+              value={value.start || ""}
+              onChange={(e) => onChange({ ...value, start: e.target.value || null })}
+            />
+            <span className="text-xs text-slate-500">(optional)</span>
+          </div>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">/week</span>
+            <input
+              className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-20"
+              type="number"
+              min={1}
+              max={7}
+              value={value.frequencyPerWeek || 3}
+              onChange={(e) => onChange({ ...value, frequencyPerWeek: +e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Days</span>
+            <MultiDay
+              value={value.preferredDays || []}
+              onChange={(arr) => onChange({ ...value, preferredDays: arr })}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Time</span>
+            <input
+              className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-28"
+              type="time"
+              value={value.preferredStart || ""}
+              onChange={(e) => onChange({ ...value, preferredStart: e.target.value || null })}
+            />
+            <span className="text-xs text-slate-500">(optional)</span>
           </div>
         </div>
       )}
-    </Modal>
+
+      <div className="grid md:grid-cols-2 gap-2 mt-2">
+        <div>
+          <div className="text-xs text-slate-300 mb-1">If‑Then / Yet</div>
+          <textarea
+            className="w-full h-20 rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+            value={value.ifThenYet || ""}
+            onChange={(e) => onChange({ ...value, ifThenYet: e.target.value })}
+            placeholder="If shift runs late -> shorter night review; Yet I keep momentum."
+          />
+        </div>
+        <div>
+          <div className="text-xs text-slate-300 mb-1">Rationale</div>
+          <textarea
+            className="w-full h-20 rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+            value={value.rationale || ""}
+            onChange={(e) => onChange({ ...value, rationale: e.target.value })}
+            placeholder="Why this action matters now."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MultiDay({
+  value,
+  onChange,
+}: {
+  value: number[];
+  onChange: (v: number[]) => void;
+}) {
+  const toggle = (i: number) =>
+    onChange(value.includes(i) ? value.filter((d) => d !== i) : [...value, i].sort());
+  return (
+    <div className="flex flex-wrap gap-1">
+      {DAY.map((d, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => toggle(i)}
+          className={`px-2 py-1 rounded border text-sm ${
+            value.includes(i)
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-slate-900 text-slate-200 border-slate-600 hover:bg-slate-800"
+          }`}
+        >
+          {d}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FrameworkGrid({
+  title,
+  fields,
+  value,
+  onChange,
+}: {
+  title: string;
+  fields: Array<[keyof OCvEDaR | keyof OPISMIT, string]>;
+  value: any;
+  onChange: (v: any) => void;
+}) {
+  return (
+    <div className="rounded border border-slate-600 p-2">
+      <div className="text-xs font-semibold text-slate-300 mb-2">{title}</div>
+      <div className="grid grid-cols-1 gap-2">
+        {fields.map(([k, label]) => (
+          <div key={String(k)}>
+            <div className="text-xs text-slate-400 mb-1">{label}</div>
+            <textarea
+              className="w-full h-16 rounded border border-slate-600 bg-slate-900 p-2 text-sm"
+              value={value?.[k] || ""}
+              onChange={(e) => onChange({ ...value, [k]: e.target.value })}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

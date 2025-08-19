@@ -34,7 +34,7 @@ export default function PassionTab() {
         columns={["Active (3)", "Incubating (≤3)", "Dormant (∞)"]}
       />
 
-      <Active13Panel tabKey="passion-13" title="1–3 Month Active Goals" />
+      <Active13Panel tab="passion" title="1–3 Month Active Goals" />
     </div>
   );
 }

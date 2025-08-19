@@ -49,7 +49,7 @@ export default function PersonTab() {
             columns={["Active (1)", "Incubating (≤3)", "Dormant (∞)"]}
           />
 
-          <Active13Panel tabKey="person-13" title="Selected Active 1–3 Month Goal" />
+          <Active13Panel tab="person" title="Selected Active 1–3 Month Goal" />
         </Section>
       ))}
     </div>

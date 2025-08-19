@@ -1,42 +1,74 @@
 "use client";
+import { useMemo } from "react";
 import { useStore } from "@/state/useStore";
+import PlannerActionCard from "@/components/PlannerActionCard";
 
-const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const todayIdx = new Date().getDay();
+const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function PlannerWeek(){
-  const { tasks } = useStore();
+export default function PlannerWeek() {
+  const { plannerActions, prefs } = useStore();
+
+  const byDay = useMemo(() => {
+    const grouped: Record<number, any[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    for (const a of plannerActions) grouped[a.day].push(a);
+    for (const d of Object.keys(grouped)) {
+      grouped[+d] = grouped[+d].sort((a, b) => {
+        const sa = a.start ? a.start : "";
+        const sb = b.start ? b.start : "";
+        if (!sa && !sb) return (a.order || 0) - (b.order || 0);
+        if (!sa) return -1; // floating first
+        if (!sb) return 1;
+        return sa.localeCompare(sb);
+      });
+    }
+    return grouped;
+  }, [plannerActions]);
 
   return (
-    <div>
-      <h3 className="font-semibold mb-2">Weekly Planner</h3>
+    <section className="rounded-2xl border border-slate-300 bg-white p-4">
+      <header className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-900">Weekly Planner</h3>
+        <div className="text-xs text-slate-700">Snap: {prefs.plannerGridMinutes} min</div>
+      </header>
+
       <div className="grid grid-cols-7 gap-3">
-        {dayNames.map((d, idx)=> (
-          <div
-            key={d}
-            className={`rounded-2xl border p-3 min-h-[220px] ${idx===todayIdx? 'border-indigo-500 bg-indigo-50/10':''}`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-medium">{d}</div>
-              {idx===todayIdx && <span className="text-xs lp-chip">Today</span>}
-            </div>
-            <div className="space-y-2">
-              {tasks.filter(t=>t.day===idx).map(t=> (
-                <div
-                  key={t.id}
-                  className={`w-full text-left rounded-xl px-3 py-2 border ${t.fixed? 'bg-white/10':'bg-white/5'} hover:bg-white/10`}
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-300">
-                    <span>{t.start}–{t.end}</span>
-                    <span className="lp-chip">{t.bucket}</span>
-                  </div>
-                  <div className="text-sm font-medium text-slate-100">{t.title}</div>
+        {dayNames.map((d, i) => {
+          const floating = byDay[i].filter((a) => !a.start);
+          const scheduled = byDay[i].filter((a) => !!a.start);
+          return (
+            <div
+              key={d}
+              className="rounded-xl border border-slate-300 bg-slate-50 p-2"
+            >
+              <div className="font-semibold text-slate-900 mb-2">{d}</div>
+
+              {/* Floating */}
+              <div className="mb-3">
+                <div className="text-xs text-slate-700 mb-1">Unscheduled</div>
+                <div className="space-y-2">
+                  {floating.length ? (
+                    floating.map((a: any) => <PlannerActionCard key={a.id} action={a} />)
+                  ) : (
+                    <div className="text-xs text-slate-500">None</div>
+                  )}
                 </div>
-              ))}
+              </div>
+
+              {/* Scheduled */}
+              <div>
+                <div className="text-xs text-slate-700 mb-1">Scheduled</div>
+                <div className="space-y-2">
+                  {scheduled.length ? (
+                    scheduled.map((a: any) => <PlannerActionCard key={a.id} action={a} />)
+                  ) : (
+                    <div className="text-xs text-slate-500">None</div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,238 +1,204 @@
 "use client";
 import { useMemo } from "react";
 import { useStore } from "@/state/useStore";
-import Active13EditModal from "./Active13EditModal";
+import type { GoalNode, PlannerAction, TabId } from "@/domain/types";
+import Active13EditModal from "@/components/Active13EditModal";
 
-/**
- * 1–3 Month Active Goals — Card Grid
- *
- * Reads "active" items from the 1–3 AID board (tabKey = passion-13 | play-13 | person-13)
- * and renders a card for each. Each card can show:
- * - Lead / Lag metrics (from GoalNode.lead / .lag)
- * - Weekly milestones (GoalNode.weekly?: string[])
- * - Daily tasks & habits (GoalNode.daily?: string[])
- * - If–Then / Yet map (GoalNode.ifThenYet?: string)
- * - Rationale (GoalNode.rationale?: string)
- * - Framework blocks:
- *      O-C-V-E-D-A-R  (GoalNode.ocvedar?: {O,C,V,E,D,A,R})
- *      O-P-I-S-M-I-T  (GoalNode.opismit?: {O,P,I,S,M,I2,T})
- *
- * NOTE: This component tolerates missing fields and shows soft placeholders.
- */
-export default function Active13Panel({
-  tabKey,
-  title = "Selected Active 1–3 Month Goals",
-  subtitle = "Select an active goal to see its weekly/daily breakdown.",
-}: {
-  tabKey: string;
-  title?: string;
-  subtitle?: string;
-}) {
-  const { boards, goals } = useStore();
+const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // all active board items for this 1–3 board
-  const activeItems = useMemo(
-    () =>
-      boards
-        .filter((b) => b.tabId === tabKey && b.status === "active")
-        .sort((a, b) => {
-          const sa = typeof a.score === "number" ? a.score : -Infinity;
-          const sb = typeof b.score === "number" ? b.score : -Infinity;
-          return sb - sa || (a.title || "").localeCompare(b.title || "");
-        }),
-    [boards, tabKey]
-  );
+function endFromStart(start?: string | null, durationMin?: number): string | null {
+  if (!start || !durationMin) return null;
+  const [hh, mm] = start.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  const total = (hh * 60 + mm + durationMin) % (24 * 60);
+  const eh = Math.floor(total / 60);
+  const em = total % 60;
+  return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+}
 
-  // join with goals by id (BoardCard.id === GoalNode.id)
-  const cards = useMemo(() => {
-    return activeItems.map((b) => {
-      const g = goals.find((x) => x.id === b.id);
-      const anyG = g as any;
+export default function Active13Panel({ tab }: { tab?: TabId }) {
+  const { boards, goals, setOpenActive13ForGoalId, plannerActions } = useStore();
 
-      return {
-        id: b.id,
-        title: b.title || anyG?.title || "Untitled",
-        score: b.score,
-        lead: anyG?.lead || anyG?.leadMetric || "",
-        lag: anyG?.lag || anyG?.lagMetric || "",
-        weekly: (anyG?.weekly as string[]) || [],
-        daily: (anyG?.daily as string[]) || [],
-        ifThenYet: anyG?.ifThenYet || "",
-        rationale: anyG?.rationale || "",
-        ocvedar:
-          (anyG?.ocvedar as
-            | { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string }
-            | undefined) || undefined,
-        opismit:
-          (anyG?.opismit as
-            | { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string }
-            | undefined) || undefined,
-      };
-    });
-  }, [activeItems, goals]);
+  const activeCards = useMemo(() => {
+    const all = boards.filter((b) => b.tabId.endsWith("-13") && b.status === "active");
+    if (!tab) return all;
+    const key = `${tab}-13`;
+    return all.filter((b) => b.tabId === key);
+  }, [boards, tab]);
+
+  const items = activeCards
+    .map((c) => goals.find((g) => g.id === c.id))
+    .filter(Boolean) as GoalNode[];
 
   return (
-    <section className="rounded-2xl border border-slate-700/60 bg-slate-800 p-4">
-      <h3 className="font-semibold mb-2">
-        {title}
-        {cards.length ? ` (${cards.length})` : ""}
-      </h3>
+    <>
+      <section className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+        <header className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-100">Selected Active 1–3 Month Goals</h3>
+        </header>
 
-      {cards.length === 0 ? (
-        <div className="text-sm text-slate-400">{subtitle}</div>
-      ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {cards.map((g) => (
-            <GoalCard key={g.id} {...g} />
-          ))}
-        </div>
-      )}
+        {items.length === 0 ? (
+          <div className="text-sm text-slate-300">No active 1–3 month goals yet.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {items.map((g) => (
+              <GoalCard
+                key={g.id}
+                goal={g}
+                actionsForGoal={plannerActions.filter((p) => p.goalId === g.id)}
+                onEdit={() => setOpenActive13ForGoalId(g.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Centralized 1–3 editor modal */}
       <Active13EditModal />
-    </section>
+    </>
   );
 }
 
-/* ---------- card ---------- */
-
 function GoalCard({
-  id,
-  title,
-  score,
-  lead,
-  lag,
-  weekly,
-  daily,
-  ifThenYet,
-  rationale,
-  ocvedar,
-  opismit,
+  goal,
+  actionsForGoal,
+  onEdit,
 }: {
-  id: string;
-  title: string;
-  score?: number;
-  lead?: string;
-  lag?: string;
-  weekly: string[];
-  daily: string[];
-  ifThenYet?: string;
-  rationale?: string;
-  ocvedar?: { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string };
-  opismit?: { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string };
+  goal: GoalNode;
+  actionsForGoal: PlannerAction[];
+  onEdit: () => void;
 }) {
-  const { setOpenActive13ForGoalId } = useStore();
-
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-      {/* header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="font-semibold pr-3">{title}</div>
-        <div className="shrink-0 ml-2 inline-flex items-center gap-2">
-          {lead || lag ? (
-            <span className="rounded-full bg-slate-700 text-slate-100 text-xs px-2 py-0.5">
-              {lead ? `Lead: ${lead}` : ""}
-              {lead && lag ? " • " : ""}
-              {lag ? `Lag: ${lag}` : ""}
+    <div className="rounded-xl border border-slate-700 p-3 bg-slate-900/30">
+      <div className="flex items-center justify-between mb-1">
+        <div className="font-semibold text-slate-100">{goal.title}</div>
+        <div className="flex items-center gap-2">
+          {goal.lead && (
+            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-200">
+              Lead: {goal.lead}
             </span>
-          ) : null}
-          <span className="rounded-full bg-slate-700 text-slate-100 text-xs px-2 py-0.5">
-            {typeof score === "number" ? score.toFixed(1) : "?"}
-          </span>
+          )}
+          {goal.lag && (
+            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-200">
+              Lag: {goal.lag}
+            </span>
+          )}
           <button
-            aria-label="Edit 1–3 details"
-            onClick={() => setOpenActive13ForGoalId(id)}
-            className="rounded px-2 py-0.5 text-slate-300 hover:bg-slate-700/60"
-            title="Edit 1–3 details…"
+            onClick={onEdit}
+            aria-label="Edit 1–3 month details"
+            className="text-xs rounded border border-slate-600 px-2 py-1 text-slate-200 hover:bg-slate-800"
           >
             ⋯
           </button>
         </div>
       </div>
 
-      {/* weekly / daily */}
-      <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-        <ListBlock title="Weekly" items={weekly} />
-        <ListBlock title="Daily" items={daily} />
+      {/* Milestones */}
+      <div className="mt-2">
+        <div className="text-xs font-semibold text-slate-200 mb-1">Milestones</div>
+        {goal.milestones && goal.milestones.length > 0 ? (
+          <ul className="text-sm list-disc pl-5 space-y-1">
+            {goal.milestones.map((m) => (
+              <li key={m.key} className="text-slate-100">
+                {m.label}
+                {m.target ? <span className="text-slate-300"> — {m.target}</span> : null}
+                {m.dueWeek ? <span className="ml-2 text-slate-400">({m.dueWeek})</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-sm text-slate-300">No milestones yet.</div>
+        )}
       </div>
 
-      {/* If–Then / Yet & Rationale */}
-      <TextBlock title="If–Then / Yet Map" text={ifThenYet} />
-      <TextBlock title="Rationale" text={rationale} />
+      {/* Actions */}
+      <div className="mt-3">
+        <div className="text-xs font-semibold text-slate-200 mb-1">Actions</div>
+        {goal.actionsTemplate && goal.actionsTemplate.length > 0 ? (
+          <div className="space-y-2">
+            {goal.actionsTemplate.map((a) => {
+              let when = "";
+              if (a.mode === "specific") {
+                const d = typeof a.day === "number" ? DAY[a.day] : "Day?";
+                when = `${d}${a.start ? ` ${a.start}` : ""} • ${a.durationMin}m`;
+              } else {
+                const freq = a.frequencyPerWeek ?? 0;
+                const days =
+                  a.preferredDays && a.preferredDays.length
+                    ? " " + a.preferredDays.map((i) => DAY[i]).join("/")
+                    : "";
+                const t = a.preferredStart ? ` ${a.preferredStart}` : "";
+                when = `${freq}×/wk${days}${t} • ${a.durationMin}m`;
+              }
 
-      {/* frameworks */}
-      <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-        <FrameworkBox title="O‑C‑V‑E‑D‑A‑R" entries={ocvedar} order={["O","C","V","E","D","A","R"]} />
-        <FrameworkBox title="O‑P‑I‑S‑M‑I‑T" entries={opismit} order={["O","P","I","S","M","I2","T"]} labelMap={{I2:"I"}} />
+              const instances = actionsForGoal.filter((p) => p.templateKey === a.key);
+              const weekLine =
+                instances.length > 0
+                  ? "This week: " +
+                    instances
+                      .map((p) => {
+                        const end = endFromStart(p.start, p.durationMin);
+                        if (!p.start) return `${DAY[p.day]} (unscheduled)`;
+                        return `${DAY[p.day]} ${p.start}${end ? `-${end}` : ""}`;
+                      })
+                      .join(", ")
+                  : "";
+
+              return (
+                <div key={a.key} className="rounded border border-slate-700 bg-slate-900/40 p-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-slate-100">{a.label}</div>
+                    <div className="text-xs text-slate-300">{when}</div>
+                  </div>
+
+                  {(a.ifThenYet || a.rationale) && (
+                    <div className="mt-1 text-xs text-slate-300 space-y-0.5">
+                      {a.ifThenYet && (
+                        <div>
+                          <span className="font-semibold">If/Then/Yet:</span>{" "}
+                          <span>{a.ifThenYet}</span>
+                        </div>
+                      )}
+                      {a.rationale && (
+                        <div>
+                          <span className="font-semibold">Why:</span>{" "}
+                          <span>{a.rationale}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {weekLine && <div className="mt-1 text-xs text-slate-400">{weekLine}</div>}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-300">No actions yet.</div>
+        )}
+      </div>
+
+      {/* Framework notes */}
+      <div className="mt-3 grid md:grid-cols-2 gap-2">
+        <div className="rounded border border-slate-700 bg-slate-900/40 p-2">
+          <div className="text-xs font-semibold text-slate-200 mb-1">O‑C‑V‑E‑D‑A‑R</div>
+          <pre className="whitespace-pre-wrap text-xs text-slate-300">
+{formatKV(goal.ocvedar)}
+          </pre>
+        </div>
+        <div className="rounded border border-slate-700 bg-slate-900/40 p-2">
+          <div className="text-xs font-semibold text-slate-200 mb-1">O‑P‑I‑S‑M‑I‑T</div>
+          <pre className="whitespace-pre-wrap text-xs text-slate-300">
+{formatKV(goal.opismit)}
+          </pre>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------- bits ---------- */
-
-function ListBlock({ title, items }: { title: string; items: string[] }) {
-  const has = items && items.length > 0;
-  return (
-    <div>
-      <div className="text-xs text-slate-400 mb-1">{title}</div>
-      {has ? (
-        <ul className="list-disc list-inside space-y-1">
-          {items.map((t, i) => (
-            <li key={i}>{t}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-slate-500 text-xs">No {title.toLowerCase()} yet.</div>
-      )}
-    </div>
-  );
-}
-
-function TextBlock({ title, text }: { title: string; text?: string }) {
-  if (!text) return null;
-  return (
-    <div className="mb-2">
-      <div className="text-xs text-slate-400">{title}</div>
-      <div className="text-sm">{text}</div>
-    </div>
-  );
-}
-
-function FrameworkBox({
-  title,
-  entries,
-  order,
-  labelMap,
-}: {
-  title: string;
-  entries?: Record<string, string | undefined>;
-  order: string[];
-  labelMap?: Record<string, string>;
-}) {
-  if (!entries) {
-    return (
-      <div className="rounded-lg border border-slate-700/60 p-2 text-slate-500">
-        <div className="font-medium mb-1">{title}</div>
-        <div className="text-xs">No entries yet.</div>
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-lg border border-slate-700/60 p-2">
-      <div className="font-medium mb-1">{title}</div>
-      <div className="space-y-0.5">
-        {order.map((k) => {
-          const label = (labelMap && labelMap[k]) || k;
-          const val = entries[k];
-          return (
-            <div key={k}>
-              <b>{label}:</b>{" "}
-              {val ? <span>{val}</span> : <span className="text-slate-500">—</span>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+function formatKV(obj: any): string {
+  if (!obj) return "No entries yet.";
+  const entries = Object.entries(obj).filter(([, v]) => v);
+  if (entries.length === 0) return "No entries yet.";
+  return entries.map(([k, v]) => `${k}: ${String(v)}`).join("\n");
 }

@@ -1,7 +1,8 @@
 "use client";
 import { create } from "zustand";
 import {
-  BoardCard, BoardStatus, Budget, GoalNode, Task, Vision, UserPrefs, PlannerSettings, TabId
+  BoardCard, BoardStatus, Budget, GoalNode, Task, Vision, UserPrefs, PlannerSettings, TabId,
+  PlannerAction, ActionTemplate
 } from "@/domain/types";
 import {
   seedBoards, seedBudgets, seedGoals, seedTasks, seedVisions, seedPrefs, seedSettings
@@ -9,6 +10,7 @@ import {
 
 // ---------- helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 10);
+const clamp01to59 = (n:number) => Math.max(1, Math.min(59, Math.round(n)));
 
 type Horizon = "12+" | "1-3" | "other";
 type Rubric = "IART+G" | "JRN" | "UIE";
@@ -57,6 +59,15 @@ const CAPS: Record<string, { active: number; incubating: number }> = {
   "person-13": { active: 1, incubating: 3 }
 };
 
+// week key helper (ISO week-like, simplified)
+function getWeekKey(d = new Date()): string {
+  const dt = new Date(d);
+  const onejan = new Date(dt.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((dt.getTime() - onejan.getTime()) / 86400000) + 1;
+  const week = Math.ceil((dayOfYear + ((onejan.getDay() + 6) % 7)) / 7);
+  return `${dt.getFullYear()}-${String(week).padStart(2, "0")}`;
+}
+
 // ---------- store ----------
 type Store = {
   budgets: Budget[];
@@ -75,6 +86,9 @@ type Store = {
   setOpenRubricForGoalId: (id: string | null) => void;
   openActive13ForGoalId: string | null;
   setOpenActive13ForGoalId: (id: string | null) => void;
+
+  // Planner instances (per week)
+  plannerActions: PlannerAction[];
 
   visibleVisionsForTab: (tab: TabId) => Vision[];
   goalsForDirection: (directionId: string) => GoalNode[];
@@ -96,6 +110,11 @@ type Store = {
 
   upsertBoardForGoal: (goalId: string) => void;
   rebalanceBoard: (tab: TabId, horizon: Horizon) => void;
+
+  // planner API
+  generatePlannerActionsForWeek: (weekKey?: string) => void;
+  movePlannerAction: (id: string, upd: Partial<Pick<PlannerAction, "day"|"start"|"order">>) => void;
+  updatePlannerAction: (id: string, patch: Partial<PlannerAction>) => void;
 };
 
 export const useStore = create<Store>((set, get) => ({
@@ -115,6 +134,9 @@ export const useStore = create<Store>((set, get) => ({
   setOpenRubricForGoalId: (id) => set(() => ({ openRubricForGoalId: id })),
   openActive13ForGoalId: null,
   setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
+
+  // planner
+  plannerActions: [],
 
   visibleVisionsForTab: (tab) => {
     const { visions, goals, visionTab } = get();
@@ -262,6 +284,7 @@ export const useStore = create<Store>((set, get) => ({
     set((state) => ({
       goals: state.goals.filter((g) => !toDelete.has(g.id)),
       boards: state.boards.filter((b) => !toDelete.has(b.id)), // board id = goalId
+      plannerActions: state.plannerActions.filter((p) => !toDelete.has(p.goalId)),
     }));
   },
 
@@ -341,4 +364,91 @@ export const useStore = create<Store>((set, get) => ({
       })
     }));
   },
+
+  // ---------- planner ----------
+  generatePlannerActionsForWeek: (weekKey) => {
+    const wk = weekKey || getWeekKey();
+    const { boards, goals } = get();
+
+    // Only active 1–3 items
+    const active13 = boards.filter(b => b.tabId.endsWith("-13") && b.status === "active");
+
+    const newly: PlannerAction[] = [];
+    for (const card of active13) {
+      const g = goals.find(x => x.id === card.id);
+      if (!g || !g.actionsTemplate || g.actionsTemplate.length === 0) continue;
+
+      for (const t of g.actionsTemplate) {
+        if (t.mode === "specific") {
+          if (t.durationMin && typeof t.day === "number") {
+            newly.push({
+              id: uid(),
+              weekKey: wk,
+              goalId: g.id,
+              templateKey: t.key,
+              label: t.label,
+              day: t.day,
+              durationMin: clamp01to59(t.durationMin),
+              start: t.start ?? null,
+              ifThenYet: t.ifThenYet,
+              rationale: t.rationale,
+              order: 0,
+            });
+          }
+          continue;
+        }
+        // frequency
+        if (t.mode === "frequency" && t.durationMin && (t.frequencyPerWeek || 0) > 0) {
+          const freq = Math.max(1, Math.min(7, Math.round(t.frequencyPerWeek as number)));
+          let days = (t.preferredDays && t.preferredDays.length)
+            ? t.preferredDays.slice(0)
+            : [1,3,5,0,2,4,6]; // M/W/F bias then others
+          // expand/cycle to freq
+          const picks: number[] = [];
+          let i = 0;
+          while (picks.length < freq) {
+            picks.push(days[i % days.length] as number);
+            i++;
+          }
+          for (const d of picks) {
+            newly.push({
+              id: uid(),
+              weekKey: wk,
+              goalId: g.id,
+              templateKey: t.key,
+              label: t.label,
+              day: (d as 0|1|2|3|4|5|6),
+              durationMin: clamp01to59(t.durationMin),
+              start: t.preferredStart ?? null,
+              ifThenYet: t.ifThenYet,
+              rationale: t.rationale,
+              order: 0,
+            });
+          }
+        }
+      }
+    }
+
+    // Remove any existing instances for this week (re-gen fresh)
+    set((s) => ({
+      plannerActions: [
+        ...s.plannerActions.filter(p => p.weekKey !== wk),
+        ...newly
+      ]
+    }));
+  },
+
+  movePlannerAction: (id, upd) =>
+    set((s) => ({
+      plannerActions: s.plannerActions.map((p) =>
+        p.id === id ? { ...p, ...upd } : p
+      ),
+    })),
+
+  updatePlannerAction: (id, patch) =>
+    set((s) => ({
+      plannerActions: s.plannerActions.map((p) =>
+        p.id === id ? { ...p, ...patch } : p
+      ),
+    })),
 }));

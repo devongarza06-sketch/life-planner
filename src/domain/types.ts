@@ -1,4 +1,4 @@
-/**
+/** 
  * Core domain models for the life planner.
  * Keep intentionally small to run fast in the browser.
  */
@@ -52,6 +52,35 @@ export interface Vision {
 
 export type GoalType = 'northStar' | 'goal' | 'quarterGoal' | 'monthGoal';
 
+/** New: single “Actions” template + metric-only milestones */
+export type ActionTemplate = {
+  key: string;                 // stable per template item
+  label: string;               // "Strength", "Study", etc.
+  durationMin: number;         // required
+
+  mode: 'specific' | 'frequency';
+
+  // specific mode
+  day?: 0|1|2|3|4|5|6;         // required if mode = specific
+  start?: string | null;       // optional "HH:MM"
+
+  // frequency mode
+  frequencyPerWeek?: number;   // required if mode = frequency
+  preferredDays?: number[];    // optional; if absent we auto-spread
+  preferredStart?: string | null; // optional "HH:MM"
+
+  // reasoning (shown in planner)
+  ifThenYet?: string;
+  rationale?: string;
+};
+
+export type Milestone = {
+  key: string;
+  label: string;               // "Word count → 20k"
+  target?: string;             // free text or number string
+  dueWeek?: string;            // "YYYY-WW" or relative ("W+3")
+};
+
 export interface GoalNode {
   id: string;
   tabId: TabId;                          // grouping for boards
@@ -74,9 +103,14 @@ export interface GoalNode {
   /** Raw rubric inputs (used to compute BoardCard.score) */
   rubricInputs?: ScoreInputs;
 
-  /** 1–3 month only – used by the “Selected Active 1–3” panel */
+  /** Legacy (kept for backward compatibility in UI) */
   weekly?: string[];     // milestones
   daily?: string[];      // tasks & habits
+
+  /** Modern scheduling/metrics */
+  actionsTemplate?: ActionTemplate[];
+  milestones?: Milestone[];
+
   ifThenYet?: string;
   rationale?: string;
   ocvedar?: OCvEDaR;
@@ -97,10 +131,25 @@ export interface Task {
   day: number;           // 0..6
   start: string;         // 'HH:MM'
   end: string;           // 'HH:MM'
-  bucket: 'Passion' | 'Person' | 'Play' | 'Misc';
+  bucket: 'Passion' | 'Person' | 'Misc' | 'Play';
   title: string;
   fixed?: boolean;
 }
+
+export type PlannerAction = {
+  id: string;
+  weekKey: string;           // e.g., "2025-34"
+  goalId: string;
+  templateKey: string;
+  label: string;
+  day: 0|1|2|3|4|5|6;
+  durationMin: number;
+  start?: string | null;     // null => floating
+  ifThenYet?: string;
+  rationale?: string;
+  order?: number;
+  fixed?: boolean;
+};
 
 export interface PlannerSettings {
   snapMinutes: number;

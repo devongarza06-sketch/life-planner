@@ -1,92 +1,164 @@
-import { Budget, Vision, GoalNode, BoardCard, Task, UserPrefs, PlannerSettings } from "./types";
+// src/domain/sample-data.ts
+import { BoardCard, Budget, GoalNode, Task, Vision, UserPrefs, PlannerSettings } from "./types";
 
+// ---------- Budgets ----------
 export const seedBudgets: Budget[] = [
-  { id: "2025-08-11", dateRange: "2025-08-11/2025-08-17", daily: [45,25,15,15], weekly: [0,0,0,0] }
+  {
+    id: "2025-08-18",
+    dateRange: "2025-08-18/2025-08-24",
+    daily: [40, 30, 20, 10],
+    weekly: [20, 15, 10, 5],
+  },
 ];
 
+// ---------- Visions (Directions) ----------
+export const seedVisions: Vision[] = [
+  {
+    id: "v1",
+    label: "Become a CRNA",
+    legacyText: "Known as a calm, expert ICU nurse anesthetist",
+    legacyValues: ["Mastery", "Service"],
+    personalText: "Provide safe anesthesia care with precision",
+    personalValues: ["Growth", "Compassion"],
+  },
+  {
+    id: "v2",
+    label: "Write a Novel",
+    legacyText: "Recognized as a thoughtful storyteller",
+    legacyValues: ["Creativity", "Insight"],
+    personalText: "Complete a publishable first draft",
+    personalValues: ["Discipline", "Expression"],
+  },
+  {
+    id: "v3",
+    label: "Fitness & Health",
+    legacyText: "Strong and consistent in training",
+    legacyValues: ["Consistency"],
+    personalText: "Feel energized and improve endurance",
+    personalValues: ["Vitality"],
+  },
+  {
+    id: "v4",
+    label: "Learn Guitar",
+    legacyText: "Able to perform songs for friends",
+    legacyValues: ["Fun"],
+    personalText: "Enjoy daily music practice",
+    personalValues: ["Playfulness"],
+  },
+];
+
+// ---------- Goals ----------
+export const seedGoals: GoalNode[] = [
+  // Passion: CRNA path
+  {
+    id: "g1",
+    tabId: "passion",
+    directionId: "v1",
+    parentId: null,
+    type: "northStar",
+    title: "Become a CRNA",
+    horizon: "12+",
+    rubric: "IART+G",
+    rubricInputs: { rubric: "IART+G", I: 5, A: 4, R: 5, T: 4, G: 3 },
+  },
+  {
+    id: "g2",
+    tabId: "passion",
+    directionId: "v1",
+    parentId: "g1",
+    type: "goal",
+    title: "Ace ICU rotations",
+    horizon: "1-3",
+    rubric: "IART+G",
+    rubricInputs: { rubric: "IART+G", I: 4, A: 4, R: 4, T: 5, G: 4 },
+    weekly: ["Pass CCRN practice test"],
+    daily: ["Review hemodynamics 30m"],
+    ifThenYet: "If I feel tired → study 10m instead of skipping",
+    rationale: "Consistent study > cramming for exams",
+  },
+
+  // Passion: Novel writing
+  {
+    id: "g3",
+    tabId: "passion",
+    directionId: "v2",
+    parentId: null,
+    type: "northStar",
+    title: "Write a Novel",
+    horizon: "12+",
+    rubric: "IART+G",
+    rubricInputs: { rubric: "IART+G", I: 3, A: 4, R: 3, T: 3, G: 4 },
+  },
+  {
+    id: "g4",
+    tabId: "passion",
+    directionId: "v2",
+    parentId: "g3",
+    type: "goal",
+    title: "Finish draft outline",
+    horizon: "1-3",
+    rubric: "IART+G",
+    rubricInputs: { rubric: "IART+G", I: 4, A: 3, R: 3, T: 4, G: 4 },
+    weekly: ["Outline 3 chapters"],
+    daily: ["Write 300 words"],
+  },
+
+  // Person: Fitness
+  {
+    id: "g5",
+    tabId: "person",
+    directionId: "v3",
+    parentId: null,
+    type: "northStar",
+    title: "Fitness & Health",
+    horizon: "1-3",
+    rubric: "UIE",
+    rubricInputs: { rubric: "UIE", U: 5, I: 4, E: 5 },
+    weekly: ["Run 15 miles total"],
+    daily: ["Stretch 10m", "Lift weights 3x/wk"],
+    ifThenYet: "If raining → treadmill run instead",
+    rationale: "Health is foundational to everything else",
+  },
+
+  // Play: Guitar
+  {
+    id: "g6",
+    tabId: "play",
+    directionId: "v4",
+    parentId: null,
+    type: "northStar",
+    title: "Learn Guitar",
+    horizon: "1-3",
+    rubric: "JRN",
+    rubricInputs: { rubric: "JRN", J: 4, R: 4, N: 5 },
+    weekly: ["Learn 2 songs"],
+    daily: ["Practice 20m"],
+  },
+];
+
+// ---------- Boards (auto-generated in app, but seed some to demo) ----------
+export const seedBoards: BoardCard[] = [
+  { id: "g1", tabId: "passion-annual", status: "active", title: "Become a CRNA", score: 4.5, rubric: "IART+G" },
+  { id: "g2", tabId: "passion-13", status: "active", title: "Ace ICU rotations", score: 4.3, rubric: "IART+G" },
+  { id: "g3", tabId: "passion-annual", status: "incubating", title: "Write a Novel", score: 3.4, rubric: "IART+G" },
+  { id: "g4", tabId: "passion-13", status: "incubating", title: "Finish draft outline", score: 3.6, rubric: "IART+G" },
+  { id: "g5", tabId: "person-13", status: "active", title: "Fitness & Health", score: 4.7, rubric: "UIE" },
+  { id: "g6", tabId: "play-13", status: "active", title: "Learn Guitar", score: 4.3, rubric: "JRN" },
+];
+
+// ---------- Tasks (Weekly Planner) ----------
+export const seedTasks: Task[] = [
+  { id: "t1", day: 1, start: "08:00", end: "09:00", bucket: "Passion", title: "Review hemodynamics" },
+  { id: "t2", day: 3, start: "19:00", end: "19:30", bucket: "Passion", title: "Write 300 words" },
+  { id: "t3", day: 5, start: "07:30", end: "08:15", bucket: "Person", title: "Morning run" },
+  { id: "t4", day: 2, start: "20:00", end: "20:30", bucket: "Play", title: "Guitar practice" },
+];
+
+// ---------- Prefs & Settings ----------
 export const seedPrefs: UserPrefs[] = [
-  { theme: 'light', startOfWeek: 0, plannerGridMinutes: 30 }
+  { theme: "dark", startOfWeek: 1, plannerGridMinutes: 30 },
 ];
 
 export const seedSettings: PlannerSettings[] = [
-  { snapMinutes: 15, timeFormat: '12h', timezone: 'UTC' }
-];
-
-export const seedVisions: Vision[] = [
-  {
-    id: 'writer',
-    label: 'Become a Writer',
-    legacyText: 'Known for thoughtful, science-savvy fiction that respects medical reality; admired for mentoring new writers.',
-    legacyValues: ['Excellence','Integrity','Service','Creativity'],
-    personalText: 'A daily maker with a bias to publish; stories that sharpen my thinking and fund autonomy.',
-    personalValues: ['Mastery','Autonomy','Curiosity','Playfulness']
-  },
-  {
-    id: 'crna',
-    label: 'Become a CRNA',
-    legacyText: 'Trusted clinician who makes surgery safer; recognized for calm leadership.',
-    legacyValues: ['Competence','Compassion','Reliability'],
-    personalText: 'Financial and schedule autonomy via advanced practice; daily learning keeps me sharp.',
-    personalValues: ['Mastery','Security','Growth']
-  },
-  {
-    id: 'musician',
-    label: 'Grow as Musician',
-    legacyText: 'Friends know me as the person who brings music to gatherings.',
-    legacyValues: ['Connection','Joy','Courage'],
-    personalText: 'I can perform 3 songs comfortably and jam with others.',
-    personalValues: ['Play','Mastery','Presence']
-  },
-  // Person domain example (physical)
-  {
-    id: 'athlete',
-    label: 'Athletic Clinician',
-    legacyText: 'Peers see me as energetic, dependable, and a model of healthy habits.',
-    legacyValues: ['Vitality','Consistency','Self-respect'],
-    personalText: 'Feel light, strong, and clear-headed most days.',
-    personalValues: ['Discipline','Recovery','Joy']
-  }
-];
-
-export const seedGoals: GoalNode[] = [
-  { id: 'writer', tabId:'passion', directionId:'writer', parentId:null, type:'northStar', title:'Become a Writer', smartier:'Ship 2 publishable works/yr; maintain 4-day writing streak ≥80%.', lead:'Words/day, focus blocks', lag:'Manuscripts accepted, reviews' },
-  { id: 'writer-novel', tabId:'passion', directionId:'writer', parentId:'writer', type:'goal', title:'Novel pipeline', smartier:'120k-word sci-fi by May; passes dev-edit.', lead:'WPH, sessions/wk', lag:'Editor pass/fail' },
-  { id: 'writer-outline2', tabId:'passion', directionId:'writer', parentId:'writer-novel', type:'quarterGoal', title:'Outline v2', smartier:'10 beat sheets by Feb 15', lead:'Deep hours', lag:'Outline quality check' },
-  { id: 'writer-draft1', tabId:'passion', directionId:'writer', parentId:'writer-novel', type:'quarterGoal', title:'Draft 1', smartier:'80k by Apr 30', lead:'Words/day', lag:'Draft wordcount' },
-  { id: 'writer-shorts', tabId:'passion', directionId:'writer', parentId:'writer', type:'goal', title:'Shorts & essays', smartier:'4 shorts in 12 months', lead:'Submissions', lag:'Acceptances' },
-  { id: 'writer-flash', tabId:'passion', directionId:'writer', parentId:'writer-shorts', type:'monthGoal', title:'Monthly flash', smartier:'1 flash/mo', lead:'Drafts', lag:'Published count' },
-
-  { id: 'crna', tabId:'passion', directionId:'crna', parentId:null, type:'northStar', title:'Become a CRNA', smartier:'Admit to top program in 18–24 mo.', lead:'Study hrs, clinical experiences', lag:'GPA, certifications, offers' },
-  { id: 'crna-prereqs', tabId:'passion', directionId:'crna', parentId:'crna', type:'goal', title:'Prereqs complete', smartier:'Chem, Pharm A/A-', lead:'Study blocks/wk', lag:'Grades' },
-  { id: 'crna-admission', tabId:'passion', directionId:'crna', parentId:'crna', type:'goal', title:'Admission package', smartier:'GRE ≥75th, LORs, SOP v3', lead:'Prep hours', lag:'Scores, submitted apps' },
-
-  // Play
-  { id: 'musician', tabId:'play', directionId:'musician', parentId:null, type:'northStar', title:'Grow as Musician', smartier:'3-song set @ 90 BPM by summer.', lead:'Focused minutes', lag:'Clean recordings' },
-  { id: 'musician-tech', tabId:'play', directionId:'musician', parentId:'musician', type:'goal', title:'Technique bootcamp', smartier:'5×20-min/wk', lead:'Minutes', lag:'Error rate' },
-  { id: 'musician-rep', tabId:'play', directionId:'musician', parentId:'musician', type:'goal', title:'Repertoire', smartier:'3 songs fully learned', lead:'Sections mastered', lag:'Performance clip' },
-
-  // Person - Physical
-  { id: 'athlete', tabId:'person', directionId:'athlete', parentId:null, type:'northStar', title:'Athletic Clinician', smartier:'Sustain MVC ≥5d/wk; resting HR ↓ 5 bpm in 3 mo.', lead:'Sessions/wk, sleep hrs', lag:'HR, strength tests' },
-  { id: 'athlete-strength', tabId:'person', directionId:'athlete', parentId:'athlete', type:'goal', title:'Strength Base', smartier:'12-wk plan', lead:'Lifts/wk', lag:'5RM progress' },
-  { id: 'athlete-sleep', tabId:'person', directionId:'athlete', parentId:'athlete', type:'goal', title:'Sleep Routine', smartier:'10:30 wind-down', lead:'Evenings logged', lag:'Subjective energy' }
-];
-
-export const seedBoards: BoardCard[] = [
-  { id:'b1', tabId:'passion', status:'active', title:'CRNA Pharm module', score:4.4, rubric:'IART+G' },
-  { id:'b2', tabId:'passion', status:'active', title:'Novel +20k words', score:4.2, rubric:'IART+G' },
-  { id:'b3', tabId:'passion', status:'active', title:'App onboarding slice', score:3.9, rubric:'IART+G' },
-  { id:'b4', tabId:'passion', status:'incubating', title:'Research mini-course', score:3.4, rubric:'IART+G' },
-
-  { id:'p1', tabId:'person-physical', status:'active', title:'12-wk Strength Base', score:3.0, rubric:'UIE' },
-
-  { id:'pl1', tabId:'play-annual', status:'active', title:'Repertoire showcase', score:4.7, rubric:'JRN' },
-  { id:'pl2', tabId:'play-q', status:'active', title:'Technique bootcamp', score:4.2, rubric:'JRN' }
-];
-
-export const seedTasks: Task[] = [
-  { id:'t1', day:1, start:'07:00', end:'08:30', bucket:'Passion', title:'MIT – Novel draft', fixed:false },
-  { id:'t2', day:1, start:'18:00', end:'18:45', bucket:'Person', title:'Workout – strength', fixed:true },
-  { id:'t3', day:2, start:'07:00', end:'09:00', bucket:'Passion', title:'CRNA Pharm module', fixed:false },
-  { id:'t4', day:2, start:'20:00', end:'20:30', bucket:'Play', title:'FoW – Guitar practice', fixed:false },
-  { id:'t5', day:5, start:'17:00', end:'17:45', bucket:'Misc', title:'Weekly maintenance block', fixed:true }
+  { snapMinutes: 30, timeFormat: "24h", timezone: "America/Chicago" },
 ];
