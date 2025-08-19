@@ -65,6 +65,9 @@ type RowGeom = {
   parentX: number;
 };
 
+const splitLines = (s: string) =>
+  s.split("\n").map((x) => x.trim()).filter(Boolean);
+
 export default function GoalTree({ directionId }: { directionId: string }) {
   const { goals } = useStore();
   const tree = useMemo(() => buildTree(goals, directionId), [goals, directionId]);
@@ -108,7 +111,7 @@ function TreeNode({
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const childRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const childRefs = useRef<Record<string, HTMLDivElement | null>>({ });
   const [geom, setGeom] = useState<RowGeom | null>(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -122,24 +125,58 @@ function TreeNode({
   const [draft, setDraft] = useState<Partial<GoalNode> & {
     title?: string;
     smartier?: string;
-    lead?: string;
-    lag?: string;
+    // core
     horizon?: "12+" | "1-3" | "other";
     rubric?: "IART+G" | "JRN" | "UIE";
     rubricInputs?: any;
+
+    // 1–3 only UI state
+    lead?: string;
+    lag?: string;
+    weeklyText?: string;
+    dailyText?: string;
+    ifThenYet?: string;
+    rationale?: string;
+    oc?: { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string };
+    op?: { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string };
   }>({});
 
   useEffect(() => {
     if (!editOpen) return;
     const g = goals.find((x) => x.id === node.id);
+
     setDraft({
       title: g?.title ?? "",
-      smartier: (g as any)?.smartier ?? "",
-      lead: (g as any)?.lead ?? "",
-      lag: (g as any)?.lag ?? "",
-      horizon: (g as any)?.horizon ?? "other",
-      rubric: (g as any)?.rubric,
-      rubricInputs: (g as any)?.rubricInputs ?? undefined
+      smartier: g?.smartier ?? "",
+      horizon: g?.horizon ?? "other",
+      rubric: g?.rubric,
+      rubricInputs: g?.rubricInputs,
+
+      // 1–3 fields
+      lead: g?.lead ?? "",
+      lag: g?.lag ?? "",
+      weeklyText: (g?.weekly || []).join("\n"),
+      dailyText: (g?.daily || []).join("\n"),
+      ifThenYet: g?.ifThenYet ?? "",
+      rationale: g?.rationale ?? "",
+      oc: {
+        O: g?.ocvedar?.O || "",
+        C: g?.ocvedar?.C || "",
+        V: g?.ocvedar?.V || "",
+        E: g?.ocvedar?.E || "",
+        D: g?.ocvedar?.D || "",
+        A: g?.ocvedar?.A || "",
+        R: g?.ocvedar?.R || "",
+      },
+      op: {
+        O: g?.opismit?.O || "",
+        P: g?.opismit?.P || "",
+        I: g?.opismit?.I || "",
+        S: g?.opismit?.S || "",
+        M: g?.opismit?.M || "",
+        I2: g?.opismit?.I2 || "",
+        T: g?.opismit?.T || "",
+      },
     });
   }, [editOpen, node.id, goals]);
 
@@ -329,16 +366,39 @@ function TreeNode({
             </button>
             <button
               onClick={() => {
-                updateGoal(node.id, {
+                // build patch
+                const patch: Partial<GoalNode> = {
                   title: draft.title,
                   smartier: draft.smartier,
-                  lead: draft.lead,
-                  lag: draft.lag,
                   horizon: draft.horizon ?? "other",
                   rubric: draft.rubric,
                   rubricInputs: draft.rubricInputs
-                });
-                // ensure AID board existence/placement
+                };
+
+                // Only persist extra fields when 1–3 months is selected
+                if (draft.horizon === "1-3") {
+                  patch.lead = (draft.lead || "").trim() || undefined;
+                  patch.lag = (draft.lag || "").trim() || undefined;
+                  patch.weekly = splitLines(draft.weeklyText || "");
+                  patch.daily = splitLines(draft.dailyText || "");
+                  patch.ifThenYet = (draft.ifThenYet || "").trim() || undefined;
+                  patch.rationale = (draft.rationale || "").trim() || undefined;
+                  patch.ocvedar = { ...(draft.oc || {}) };
+                  patch.opismit = { ...(draft.op || {}) };
+                } else {
+                  // Clear 1–3‑only fields when switching away
+                  patch.lead = undefined;
+                  patch.lag = undefined;
+                  patch.weekly = undefined;
+                  patch.daily = undefined;
+                  patch.ifThenYet = undefined;
+                  patch.rationale = undefined;
+                  patch.ocvedar = undefined;
+                  patch.opismit = undefined;
+                }
+
+                updateGoal(node.id, patch);
+                // ensure AID board existence/placement (also rebalances)
                 upsertBoardForGoal(node.id);
                 setEditOpen(false);
               }}
@@ -365,9 +425,7 @@ function TreeNode({
             <div className="text-xs text-slate-600 mb-1">Timeline</div>
             <select
               value={draft.horizon ?? "other"}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, horizon: e.target.value as any }))
-              }
+              onChange={(e) => setDraft((d) => ({ ...d, horizon: e.target.value as any }))}
               className="w-full rounded border p-2 text-sm text-slate-900"
             >
               <option value="other">Neither / in-between</option>
@@ -390,29 +448,110 @@ function TreeNode({
             />
           </div>
 
-          {/* Lead/Lag */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Lead metric</div>
-              <input
-                value={draft.lead ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, lead: e.target.value }))}
-                className="w-full rounded border p-2 text-sm text-slate-900"
-                placeholder="e.g., sessions/week"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Lag metric</div>
-              <input
-                value={draft.lag ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, lag: e.target.value }))}
-                className="w-full rounded border p-2 text-sm text-slate-900"
-                placeholder="e.g., outcome"
-              />
-            </div>
-          </div>
+          {/* 1–3 month ONLY fields */}
+          {draft.horizon === "1-3" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Lead metric</div>
+                  <input
+                    value={draft.lead ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, lead: e.target.value }))}
+                    className="w-full rounded border p-2 text-sm text-slate-900"
+                    placeholder="e.g., sessions/week"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Lag metric</div>
+                  <input
+                    value={draft.lag ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, lag: e.target.value }))}
+                    className="w-full rounded border p-2 text-sm text-slate-900"
+                    placeholder="e.g., reviewer pass / outcome"
+                  />
+                </div>
+              </div>
 
-          {/* Rubric inputs (auto determines rubric by tab: passion=IART+G, play=JRN, person=UIE) */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Weekly milestones (one per line)</div>
+                  <textarea
+                    value={draft.weeklyText ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, weeklyText: e.target.value }))}
+                    className="w-full h-24 rounded border p-2 text-sm text-slate-900"
+                    placeholder={"Watch 3 lectures\nOutline ch.3"}
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Daily tasks & habits (one per line)</div>
+                  <textarea
+                    value={draft.dailyText ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, dailyText: e.target.value }))}
+                    className="w-full h-24 rounded border p-2 text-sm text-slate-900"
+                    placeholder={"45‑min deep block\n15‑min review"}
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">If–Then / Yet Map</div>
+                  <textarea
+                    value={draft.ifThenYet ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, ifThenYet: e.target.value }))}
+                    className="w-full h-20 rounded border p-2 text-sm text-slate-900"
+                    placeholder="If shift runs late → do 20‑min night review."
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Rationale</div>
+                  <textarea
+                    value={draft.rationale ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, rationale: e.target.value }))}
+                    className="w-full h-20 rounded border p-2 text-sm text-slate-900"
+                    placeholder="Build exam readiness and foundational mastery."
+                  />
+                </div>
+              </div>
+
+              {/* Frameworks */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="rounded border p-2">
+                  <div className="text-xs font-medium mb-2">O‑C‑V‑E‑D‑A‑R</div>
+                  {(["O","C","V","E","D","A","R"] as const).map((k) => (
+                    <div key={k} className="mb-2">
+                      <label className="text-xs mr-2 w-4 inline-block font-semibold">{k}:</label>
+                      <input
+                        className="w-[85%] rounded border p-1 text-sm"
+                        value={(draft.oc?.[k] ?? "") as string}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, oc: { ...(d.oc || {}), [k]: e.target.value } }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded border p-2">
+                  <div className="text-xs font-medium mb-2">O‑P‑I‑S‑M‑I‑T</div>
+                  {(["O","P","I","S","M","I2","T"] as const).map((k) => (
+                    <div key={k} className="mb-2">
+                      <label className="text-xs mr-2 w-6 inline-block font-semibold">{k}:</label>
+                      <input
+                        className="w-[83%] rounded border p-1 text-sm"
+                        value={(draft.op?.[k] ?? "") as string}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, op: { ...(d.op || {}), [k]: e.target.value } }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rubric inputs editor (unchanged from your version) */}
           <RubricEditor
             nodeId={node.id}
             draft={draft}

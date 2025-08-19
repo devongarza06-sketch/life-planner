@@ -20,6 +20,14 @@ export type UIEInputs   = { rubric: 'UIE';    U?: number; I?: number; E?: number
 /** Union used in GoalNode.rubricInputs */
 export type ScoreInputs = IARTGInputs | JRNInputs | UIEInputs;
 
+/** Experimentation & Problem‑solving frameworks (optional, 1–3 goals) */
+export interface OCvEDaR {
+  O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string;
+}
+export interface OPISMIT {
+  O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string;
+}
+
 export interface UserPrefs {
   theme: 'light' | 'dark';
   startOfWeek: number;      // 0 = Sun … 6 = Sat
@@ -52,17 +60,27 @@ export interface GoalNode {
   type: GoalType;
   title: string;
   smartier?: string;
+
+  // Metrics (primarily useful for 1–3 goals)
   lead?: string;
   lag?: string;
 
-  /** NEW — where this goal belongs for AID boards (select in GoalTree edit) */
+  /** Where this goal belongs for AID boards (select in GoalTree edit) */
   horizon?: Horizon;                     // '12+' | '1-3' | 'other'
 
-  /** NEW — rubric family used to score this goal */
+  /** Rubric family used to score this goal */
   rubric?: Rubric;                       // 'IART+G' | 'JRN' | 'UIE'
 
-  /** NEW — raw rubric inputs (used to compute BoardCard.score) */
+  /** Raw rubric inputs (used to compute BoardCard.score) */
   rubricInputs?: ScoreInputs;
+
+  /** 1–3 month only – used by the “Selected Active 1–3” panel */
+  weekly?: string[];     // milestones
+  daily?: string[];      // tasks & habits
+  ifThenYet?: string;
+  rationale?: string;
+  ocvedar?: OCvEDaR;
+  opismit?: OPISMIT;
 }
 
 export interface BoardCard {
