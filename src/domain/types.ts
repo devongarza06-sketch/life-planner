@@ -6,6 +6,20 @@
 export type BoardStatus = 'active' | 'incubating' | 'dormant';
 export type TabId = 'passion' | 'person' | 'play';
 
+/** Which horizon a goal belongs to for AID boards. */
+export type Horizon = '12+' | '1-3' | 'other';
+
+/** Which rubric a goal uses for scoring. */
+export type Rubric = 'IART+G' | 'JRN' | 'UIE';
+
+/** Rubric-specific input shapes used to calculate a score. */
+export type IARTGInputs = { rubric: 'IART+G'; I?: number; A?: number; R?: number; T?: number; G?: number };
+export type JRNInputs   = { rubric: 'JRN';    J?: number; R?: number; N?: number };
+export type UIEInputs   = { rubric: 'UIE';    U?: number; I?: number; E?: number };
+
+/** Union used in GoalNode.rubricInputs */
+export type ScoreInputs = IARTGInputs | JRNInputs | UIEInputs;
+
 export interface UserPrefs {
   theme: 'light' | 'dark';
   startOfWeek: number;      // 0 = Sun … 6 = Sat
@@ -40,15 +54,24 @@ export interface GoalNode {
   smartier?: string;
   lead?: string;
   lag?: string;
+
+  /** NEW — where this goal belongs for AID boards (select in GoalTree edit) */
+  horizon?: Horizon;                     // '12+' | '1-3' | 'other'
+
+  /** NEW — rubric family used to score this goal */
+  rubric?: Rubric;                       // 'IART+G' | 'JRN' | 'UIE'
+
+  /** NEW — raw rubric inputs (used to compute BoardCard.score) */
+  rubricInputs?: ScoreInputs;
 }
 
 export interface BoardCard {
-  id: string;
-  tabId: string;             // e.g., 'passion', 'play-annual', 'person-physical'
+  id: string;               // we map this 1:1 to GoalNode.id
+  tabId: string;            // e.g., 'passion-annual', 'passion-13', 'play-annual', 'person-13'
   status: BoardStatus;
   title: string;
-  score?: number;            // rubric score (IART+G, UIE, JRN etc.)
-  rubric?: string;
+  score?: number;           // computed rubric score
+  rubric?: string;          // label for display only
 }
 
 export interface Task {

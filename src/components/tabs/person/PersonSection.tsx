@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useStore } from "@/state/useStore";
 import VisionBoxes from "../../VisionBoxes";
 import GoalTree from "../../GoalTree";
-import AidBoard from "../../AidBoard";
+import AidBoard from "../../AIDBoard";
 import ActiveQuarterGoals from "../../ActiveQuarterGoals";
 
 export default function PersonSection({ section }:{section:{id:string; label:string}}){

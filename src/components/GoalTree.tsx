@@ -114,23 +114,32 @@ function TreeNode({
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
-  const [draft, setDraft] = useState({
-    title: "",
-    smartier: "",
-    lead: "",
-    lag: "",
-  });
 
-  const { updateGoal, addChildGoal, addSiblingGoal, removeGoalCascade, goals } = useStore();
+  const { updateGoal, addChildGoal, addSiblingGoal, removeGoalCascade, goals, upsertBoardForGoal } = useStore();
+
+  // local draft
+  const current = goals.find((g) => g.id === node.id);
+  const [draft, setDraft] = useState<Partial<GoalNode> & {
+    title?: string;
+    smartier?: string;
+    lead?: string;
+    lag?: string;
+    horizon?: "12+" | "1-3" | "other";
+    rubric?: "IART+G" | "JRN" | "UIE";
+    rubricInputs?: any;
+  }>({});
 
   useEffect(() => {
     if (!editOpen) return;
-    const current = goals.find((g) => g.id === node.id);
+    const g = goals.find((x) => x.id === node.id);
     setDraft({
-      title: current?.title ?? "",
-      smartier: (current as any)?.smartier ?? "",
-      lead: (current as any)?.lead ?? "",
-      lag: (current as any)?.lag ?? "",
+      title: g?.title ?? "",
+      smartier: (g as any)?.smartier ?? "",
+      lead: (g as any)?.lead ?? "",
+      lag: (g as any)?.lag ?? "",
+      horizon: (g as any)?.horizon ?? "other",
+      rubric: (g as any)?.rubric,
+      rubricInputs: (g as any)?.rubricInputs ?? undefined
     });
   }, [editOpen, node.id, goals]);
 
@@ -170,14 +179,14 @@ function TreeNode({
     return () => window.removeEventListener("resize", onResize);
   }, [schedule]);
 
-  const isRoot = node.parentId == null;
+  const isRoot = (current?.parentId ?? null) == null;
 
   return (
     <div ref={wrapRef} className="relative flex flex-col items-center">
       {/* Node pill */}
       <div ref={parentRef} className="relative">
         <div className="relative px-3 py-1 rounded-full bg-indigo-500 text-white text-sm shadow-sm select-none">
-          {node.title}
+          {current?.title ?? node.title}
 
           {/* Ellipsis menu button (inside pill) */}
           <button
@@ -191,7 +200,7 @@ function TreeNode({
           {/* Menu */}
           {menuOpen && (
             <div
-              className="absolute z-10 right-0 top-[120%] w-44 rounded-md border border-slate-200 bg-white shadow-lg text-sm text-slate-800"
+              className="absolute z-10 right-0 top-[120%] w-48 rounded-md border border-slate-200 bg-white shadow-lg text-sm text-slate-800"
               onMouseLeave={() => setMenuOpen(false)}
             >
               <button
@@ -230,23 +239,23 @@ function TreeNode({
                   setMenuOpen(false);
                 }}
               >
-                {isOpen ? "Hide details" : "Show details"}
+                {openDetails[node.id] ? "Hide details" : "Show details"}
               </button>
             </div>
           )}
         </div>
 
         {/* SMARTIER detail */}
-        {isOpen && (
+        {openDetails[node.id] && (
           <div className="mt-2 text-xs text-slate-200 space-y-1 text-center">
-            {node.smartier && (
+            {current?.smartier && (
               <div>
-                <span className="font-semibold">SMARTIER:</span> {node.smartier}
+                <span className="font-semibold">SMARTIER:</span> {current.smartier}
               </div>
             )}
-            {(node.lead || node.lag) && (
+            {(current?.lead || current?.lag) && (
               <div>
-                Lead: {node.lead ?? "—"} • Lag: {node.lag ?? "—"}
+                Lead: {current?.lead ?? "—"} • Lag: {current?.lag ?? "—"}
               </div>
             )}
           </div>
@@ -301,7 +310,7 @@ function TreeNode({
       <Modal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title={`Edit Goal — ${node.title}`}
+        title={`Edit Goal — ${current?.title ?? node.title}`}
         actions={
           <>
             {!isRoot && (
@@ -325,7 +334,12 @@ function TreeNode({
                   smartier: draft.smartier,
                   lead: draft.lead,
                   lag: draft.lag,
+                  horizon: draft.horizon ?? "other",
+                  rubric: draft.rubric,
+                  rubricInputs: draft.rubricInputs
                 });
+                // ensure AID board existence/placement
+                upsertBoardForGoal(node.id);
                 setEditOpen(false);
               }}
               className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700"
@@ -335,30 +349,53 @@ function TreeNode({
           </>
         }
       >
-        <div className="space-y-3 text-slate-800">
+        <div className="space-y-4 text-slate-800">
           <div>
             <div className="text-xs text-slate-600 mb-1">Title</div>
             <input
-              value={draft.title}
+              value={draft.title ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               className="w-full rounded border p-2 text-sm text-slate-900"
               placeholder="Goal title"
             />
           </div>
+
+          {/* Timeline */}
+          <div>
+            <div className="text-xs text-slate-600 mb-1">Timeline</div>
+            <select
+              value={draft.horizon ?? "other"}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, horizon: e.target.value as any }))
+              }
+              className="w-full rounded border p-2 text-sm text-slate-900"
+            >
+              <option value="other">Neither / in-between</option>
+              <option value="1-3">1–3 months</option>
+              <option value="12+">12+ months</option>
+            </select>
+            <div className="text-xs text-slate-500 mt-1">
+              Choosing 12+ or 1–3 will place this goal in the corresponding AID board.
+            </div>
+          </div>
+
+          {/* SMARTIER */}
           <div>
             <div className="text-xs text-slate-600 mb-1">SMARTIER</div>
             <textarea
-              value={draft.smartier}
+              value={draft.smartier ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, smartier: e.target.value }))}
               className="w-full min-h-[80px] rounded border p-2 text-sm text-slate-900"
               placeholder="Specific, Measurable, …"
             />
           </div>
+
+          {/* Lead/Lag */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-xs text-slate-600 mb-1">Lead metric</div>
               <input
-                value={draft.lead}
+                value={draft.lead ?? ""}
                 onChange={(e) => setDraft((d) => ({ ...d, lead: e.target.value }))}
                 className="w-full rounded border p-2 text-sm text-slate-900"
                 placeholder="e.g., sessions/week"
@@ -367,13 +404,20 @@ function TreeNode({
             <div>
               <div className="text-xs text-slate-600 mb-1">Lag metric</div>
               <input
-                value={draft.lag}
+                value={draft.lag ?? ""}
                 onChange={(e) => setDraft((d) => ({ ...d, lag: e.target.value }))}
                 className="w-full rounded border p-2 text-sm text-slate-900"
-                placeholder="e.g., performance outcome"
+                placeholder="e.g., outcome"
               />
             </div>
           </div>
+
+          {/* Rubric inputs (auto determines rubric by tab: passion=IART+G, play=JRN, person=UIE) */}
+          <RubricEditor
+            nodeId={node.id}
+            draft={draft}
+            setDraft={setDraft}
+          />
         </div>
       </Modal>
 
@@ -381,7 +425,7 @@ function TreeNode({
       <ConfirmDialog
         open={confirmDel}
         title="Delete goal?"
-        message={`Are you sure you want to delete “${node.title}” and all of its sub‑goals?`}
+        message={`Are you sure you want to delete “${current?.title ?? node.title}” and all of its sub‑goals?`}
         onCancel={() => setConfirmDel(false)}
         onConfirm={() => {
           removeGoalCascade(node.id);
@@ -390,6 +434,100 @@ function TreeNode({
         }}
         confirmText="Delete"
       />
+    </div>
+  );
+}
+
+function RubricEditor({
+  nodeId,
+  draft,
+  setDraft,
+}: {
+  nodeId: string;
+  draft: any;
+  setDraft: (u: any) => void;
+}) {
+  const { goals } = useStore();
+  const g = goals.find((x) => x.id === nodeId);
+  const tab = g?.tabId ?? "passion";
+
+  if (tab === "passion") {
+    const inputs = draft.rubricInputs ?? { rubric: "IART+G" };
+    return (
+      <div className="rounded border p-2">
+        <div className="text-xs font-medium mb-2">Rubric: IART+G</div>
+        <div className="grid grid-cols-4 gap-2">
+          {["I","A","R","T","G"].map((k) => (
+            <input
+              key={k}
+              type="number"
+              min={1}
+              max={5}
+              placeholder={k}
+              value={inputs[k] ?? ""}
+              onChange={(e) => setDraft((d: any) => ({
+                ...d, rubric: "IART+G",
+                rubricInputs: { ...(d.rubricInputs ?? { rubric: "IART+G" }), [k]: +e.target.value, rubric: "IART+G" }
+              }))}
+              className="rounded border p-2 text-sm"
+            />
+          ))}
+        </div>
+        <div className="text-xs text-slate-500 mt-1">Enter 1–5. Score averages I, A, R, T (G is a tiebreaker).</div>
+      </div>
+    );
+  }
+
+  if (tab === "play") {
+    const inputs = draft.rubricInputs ?? { rubric: "JRN" };
+    return (
+      <div className="rounded border p-2">
+        <div className="text-xs font-medium mb-2">Rubric: JRN</div>
+        <div className="grid grid-cols-3 gap-2">
+          {["J","R","N"].map((k) => (
+            <input
+              key={k}
+              type="number"
+              min={1}
+              max={5}
+              placeholder={k}
+              value={inputs[k] ?? ""}
+              onChange={(e) => setDraft((d: any) => ({
+                ...d, rubric: "JRN",
+                rubricInputs: { ...(d.rubricInputs ?? { rubric: "JRN" }), [k]: +e.target.value, rubric: "JRN" }
+              }))}
+              className="rounded border p-2 text-sm"
+            />
+          ))}
+        </div>
+        <div className="text-xs text-slate-500 mt-1">Enter 1–5. Score averages J, R, N.</div>
+      </div>
+    );
+  }
+
+  // person
+  const inputs = draft.rubricInputs ?? { rubric: "UIE" };
+  return (
+    <div className="rounded border p-2">
+      <div className="text-xs font-medium mb-2">Rubric: UIE</div>
+      <div className="grid grid-cols-3 gap-2">
+        {["U","I","E"].map((k) => (
+          <input
+            key={k}
+            type="number"
+            min={1}
+            max={5}
+            placeholder={k}
+            value={inputs[k] ?? ""}
+            onChange={(e) => setDraft((d: any) => ({
+              ...d, rubric: "UIE",
+              rubricInputs: { ...(d.rubricInputs ?? { rubric: "UIE" }), [k]: +e.target.value, rubric: "UIE" }
+            }))}
+            className="rounded border p-2 text-sm"
+          />
+        ))}
+      </div>
+      <div className="text-xs text-slate-500 mt-1">Enter 1–5. Score averages U, I, E.</div>
     </div>
   );
 }

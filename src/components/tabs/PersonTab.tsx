@@ -2,7 +2,10 @@
 import NorthStarBar from "@/components/NorthStarBar";
 import VisionBoxes from "@/components/VisionBoxes";
 import GoalTree from "@/components/GoalTree";
+import AIDBoard from "@/components/AIDBoard";
 import { useStore } from "@/state/useStore";
+import Active13Panel from "@/components/Active13Panel";
+
 
 function Section({
   title,
@@ -15,7 +18,7 @@ function Section({
 }) {
   return (
     <details
-      className="rounded-2xl border border-slate-700/60 bg-slate-800/40"
+      className="rounded-2xl border border-slate-700/60 bg-slate-800"
       open={defaultOpen}
     >
       <summary className="cursor-pointer select-none px-4 py-2 font-semibold flex items-center justify-between">
@@ -39,28 +42,14 @@ export default function PersonTab() {
           <VisionBoxes tab="person" />
           <GoalTree directionId={directionId ?? ""} />
 
-          {/* AID boards & 1–3 Month Active (visual shells) */}
-          <section className="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-4">
-            <header className="flex items-center justify-between">
-              <h4 className="font-semibold">1–3 Month Goals</h4>
-              <span className="text-xs text-slate-400">Rubric: UIE</span>
-            </header>
-            <div className="grid md:grid-cols-3 gap-3 mt-3">
-              {["Active (1)", "Incubating (≤3)", "Dormant (∞)"].map((col) => (
-                <div key={col} className="rounded-xl border border-slate-700/60 p-3">
-                  <div className="font-medium mb-2">{col}</div>
-                  <div className="text-sm text-slate-400">No items yet.</div>
-                </div>
-              ))}
-            </div>
-          </section>
+          <AIDBoard
+            label="1–3 Month Goals"
+            rubricLabel="UIE"
+            tabKey="person-13"
+            columns={["Active (1)", "Incubating (≤3)", "Dormant (∞)"]}
+          />
 
-          <section className="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-4">
-            <h4 className="font-semibold mb-2">Selected Active 1–3 Month Goal</h4>
-            <div className="text-sm text-slate-400">
-              Pick the active goal to see weekly/daily habits and experiments.
-            </div>
-          </section>
+          <Active13Panel tabKey="person-13" title="Selected Active 1–3 Month Goal" />
         </Section>
       ))}
     </div>
