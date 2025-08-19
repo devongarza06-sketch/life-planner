@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { useStore } from "@/state/useStore";
+import Active13EditModal from "./Active13EditModal";
 
 /**
  * 1–3 Month Active Goals — Card Grid
@@ -58,19 +59,24 @@ export default function Active13Panel({
         daily: (anyG?.daily as string[]) || [],
         ifThenYet: anyG?.ifThenYet || "",
         rationale: anyG?.rationale || "",
-        ocvedar: (anyG?.ocvedar as
-          | { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string }
-          | undefined) || undefined,
-        opismit: (anyG?.opismit as
-          | { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string }
-          | undefined) || undefined,
+        ocvedar:
+          (anyG?.ocvedar as
+            | { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string }
+            | undefined) || undefined,
+        opismit:
+          (anyG?.opismit as
+            | { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string }
+            | undefined) || undefined,
       };
     });
   }, [activeItems, goals]);
 
   return (
     <section className="rounded-2xl border border-slate-700/60 bg-slate-800 p-4">
-      <h3 className="font-semibold mb-2">{title}{cards.length ? ` (${cards.length})` : ""}</h3>
+      <h3 className="font-semibold mb-2">
+        {title}
+        {cards.length ? ` (${cards.length})` : ""}
+      </h3>
 
       {cards.length === 0 ? (
         <div className="text-sm text-slate-400">{subtitle}</div>
@@ -81,6 +87,9 @@ export default function Active13Panel({
           ))}
         </div>
       )}
+
+      {/* Centralized 1–3 editor modal */}
+      <Active13EditModal />
     </section>
   );
 }
@@ -88,6 +97,7 @@ export default function Active13Panel({
 /* ---------- card ---------- */
 
 function GoalCard({
+  id,
   title,
   score,
   lead,
@@ -99,6 +109,7 @@ function GoalCard({
   ocvedar,
   opismit,
 }: {
+  id: string;
   title: string;
   score?: number;
   lead?: string;
@@ -110,6 +121,8 @@ function GoalCard({
   ocvedar?: { O?: string; C?: string; V?: string; E?: string; D?: string; A?: string; R?: string };
   opismit?: { O?: string; P?: string; I?: string; S?: string; M?: string; I2?: string; T?: string };
 }) {
+  const { setOpenActive13ForGoalId } = useStore();
+
   return (
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
       {/* header */}
@@ -118,12 +131,22 @@ function GoalCard({
         <div className="shrink-0 ml-2 inline-flex items-center gap-2">
           {lead || lag ? (
             <span className="rounded-full bg-slate-700 text-slate-100 text-xs px-2 py-0.5">
-              {lead ? `Lead: ${lead}` : ""}{lead && lag ? " • " : ""}{lag ? `Lag: ${lag}` : ""}
+              {lead ? `Lead: ${lead}` : ""}
+              {lead && lag ? " • " : ""}
+              {lag ? `Lag: ${lag}` : ""}
             </span>
           ) : null}
           <span className="rounded-full bg-slate-700 text-slate-100 text-xs px-2 py-0.5">
             {typeof score === "number" ? score.toFixed(1) : "?"}
           </span>
+          <button
+            aria-label="Edit 1–3 details"
+            onClick={() => setOpenActive13ForGoalId(id)}
+            className="rounded px-2 py-0.5 text-slate-300 hover:bg-slate-700/60"
+            title="Edit 1–3 details…"
+          >
+            ⋯
+          </button>
         </div>
       </div>
 

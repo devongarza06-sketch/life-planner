@@ -1,6 +1,7 @@
 "use client";
 import { useStore } from "@/state/useStore";
 import { BoardStatus } from "@/domain/types";
+import RubricEditModal from "./RubricEditModal";
 
 export default function AIDBoard({
   label,
@@ -34,11 +35,21 @@ export default function AIDBoard({
         <Column title={columns[1]} items={by.incubating} />
         <Column title={columns[2]} items={by.dormant} />
       </div>
+
+      {/* Centralized rubric editor modal */}
+      <RubricEditModal />
     </section>
   );
 }
 
-function Column({ title, items }: { title: string; items: { id: string; title: string; score?: number }[] }) {
+function Column({
+  title,
+  items,
+}: {
+  title: string;
+  items: { id: string; title: string; score?: number }[];
+}) {
+  const { setOpenRubricForGoalId } = useStore();
   return (
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/30 p-3">
       <div className="font-medium mb-2">{title}</div>
@@ -49,8 +60,18 @@ function Column({ title, items }: { title: string; items: { id: string; title: s
           {items.map((it) => (
             <li key={it.id} className="flex items-center justify-between text-sm">
               <span className="truncate">{it.title}</span>
-              <span className="ml-3 inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs bg-slate-700 text-slate-100">
-                {typeof it.score === "number" ? it.score.toFixed(1) : "?"}
+              <span className="ml-3 inline-flex items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs bg-slate-700 text-slate-100">
+                  {typeof it.score === "number" ? it.score.toFixed(1) : "?"}
+                </span>
+                <button
+                  aria-label="Edit score"
+                  onClick={() => setOpenRubricForGoalId(it.id)}
+                  className="rounded px-2 py-0.5 text-slate-300 hover:bg-slate-700/60"
+                  title="Edit rubric score…"
+                >
+                  ⋯
+                </button>
               </span>
             </li>
           ))}

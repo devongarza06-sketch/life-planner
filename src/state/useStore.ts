@@ -70,10 +70,15 @@ type Store = {
   selected: Record<TabId, string | null>;
   visionTab: Record<string, TabId | undefined>;
 
+  // UI state for edit modals
+  openRubricForGoalId: string | null;
+  setOpenRubricForGoalId: (id: string | null) => void;
+  openActive13ForGoalId: string | null;
+  setOpenActive13ForGoalId: (id: string | null) => void;
+
   visibleVisionsForTab: (tab: TabId) => Vision[];
   goalsForDirection: (directionId: string) => GoalNode[];
 
-  // existing
   updateBudget: (idx: number, value: number) => void;
   moveBoardCard: (cardId: string, status: BoardStatus) => void;
 
@@ -89,7 +94,6 @@ type Store = {
   addSiblingGoal: (nodeId: string, title?: string) => string;
   removeGoalCascade: (id: string) => void;
 
-  // NEW: update timeline/rubric for a goal and ensure AID board item
   upsertBoardForGoal: (goalId: string) => void;
   rebalanceBoard: (tab: TabId, horizon: Horizon) => void;
 };
@@ -105,6 +109,12 @@ export const useStore = create<Store>((set, get) => ({
 
   selected: { passion: null, person: null, play: null },
   visionTab: {},
+
+  // UI state
+  openRubricForGoalId: null,
+  setOpenRubricForGoalId: (id) => set(() => ({ openRubricForGoalId: id })),
+  openActive13ForGoalId: null,
+  setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
 
   visibleVisionsForTab: (tab) => {
     const { visions, goals, visionTab } = get();
@@ -157,7 +167,6 @@ export const useStore = create<Store>((set, get) => ({
       parentId: null,
       type: "northStar",
       title: label,
-      // NEW default fields
       horizon: "other",
       rubric: undefined,
       rubricInputs: undefined,
@@ -252,7 +261,7 @@ export const useStore = create<Store>((set, get) => ({
 
     set((state) => ({
       goals: state.goals.filter((g) => !toDelete.has(g.id)),
-      boards: state.boards.filter((b) => !toDelete.has(b.id)), // we’ll store board id = goalId
+      boards: state.boards.filter((b) => !toDelete.has(b.id)), // board id = goalId
     }));
   },
 
@@ -280,9 +289,9 @@ export const useStore = create<Store>((set, get) => ({
 
     const score = scoreFromInputs(g.rubricInputs as ScoreInputs | undefined);
 
-    // Upsert with '?' score if undefined
+    // Upsert
     const nextCard: BoardCard = {
-      id: goalId, // 1:1 mapping for simplicity
+      id: goalId, // 1:1 mapping
       tabId: key,
       status: "dormant",
       title: g.title,
@@ -298,7 +307,7 @@ export const useStore = create<Store>((set, get) => ({
       return { boards };
     });
 
-    // after upsert + (optional) score -> rebalance
+    // rebalance
     get().rebalanceBoard(g.tabId, h);
   },
 
@@ -315,7 +324,6 @@ export const useStore = create<Store>((set, get) => ({
         const sa = typeof a.score === "number" ? a.score : -Infinity;
         const sb = typeof b.score === "number" ? b.score : -Infinity;
         if (sb !== sa) return sb - sa;
-        // tie-breaker: existing status then title
         return (a.title || "").localeCompare(b.title || "");
       });
 
