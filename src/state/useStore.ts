@@ -40,26 +40,35 @@ function scoreFromInputs(inputs?: ScoreInputs): number | undefined {
   return undefined;
 }
 
+// time helpers
+const pad2 = (n:number) => String(n).padStart(2, "0");
+const timeToMin = (t:string) => {
+  const [h,m] = t.split(":").map((x)=>parseInt(x,10));
+  return (isFinite(h)?h:0)*60 + (isFinite(m)?m:0);
+};
+const minToTime = (m:number) => {
+  const mm = ((m % (24*60)) + 24*60) % (24*60);
+  const h = Math.floor(mm/60); const m2 = mm%60;
+  return `${pad2(h)}:${pad2(m2)}`;
+};
+
 // Board keys: tab + horizon
 function boardKey(tab: TabId, horizon: Horizon): string {
   if (horizon === "12+") return `${tab}-annual`;
   if (horizon === "1-3") return `${tab}-13`;
-  return `${tab}-other`; // shouldn't be placed, but key maintained
+  return `${tab}-other`;
 }
 
 // Caps per board
 const CAPS: Record<string, { active: number; incubating: number }> = {
-  // passion
   "passion-annual": { active: 3, incubating: 3 },
   "passion-13": { active: 3, incubating: 3 },
-  // play
   "play-annual": { active: 3, incubating: 3 },
   "play-13": { active: 1, incubating: 3 },
-  // person (shared across sections for now)
   "person-13": { active: 1, incubating: 3 }
 };
 
-// week key helper (ISO week-like, simplified)
+// week key helper (ISO-ish)
 function getWeekKey(d = new Date()): string {
   const dt = new Date(d);
   const onejan = new Date(dt.getFullYear(), 0, 1);
@@ -78,41 +87,29 @@ type Store = {
   prefs: UserPrefs;
   settings: PlannerSettings;
 
-  /** Tab-level selection (passion, play). Person uses selectedPerson by section. */
   selected: Record<TabId, string | null>;
-  /** Person section-level selection: keys are 'physical'|'cognitive'|'emotional'|'social'|'meaning'. */
   selectedPerson: Record<string, string | null>;
-
-  /** Vision ownership: which tab a vision belongs to (unchanged). */
   visionTab: Record<string, TabId | undefined>;
-  /** NEW: which person section a vision belongs to (only for tab='person') */
   visionSection: Record<string, string | undefined>;
 
-  // UI state for edit modals
   openRubricForGoalId: string | null;
   setOpenRubricForGoalId: (id: string | null) => void;
   openActive13ForGoalId: string | null;
   setOpenActive13ForGoalId: (id: string | null) => void;
 
-  // Planner instances (per week)
   plannerActions: PlannerAction[];
 
-  /** Now accepts optional sectionKey for person tab. */
   visibleVisionsForTab: (tab: TabId, sectionKey?: string) => Vision[];
   goalsForDirection: (directionId: string) => GoalNode[];
 
   updateBudget: (idx: number, value: number) => void;
   moveBoardCard: (cardId: string, status: BoardStatus) => void;
 
-  // directions
-  /** If tab==='person', sectionKey scopes the selection. */
   selectDirection: (tab: TabId, directionId: string | null, sectionKey?: string) => void;
-  /** If tab==='person', sectionKey assigns the new vision to that section. */
   addDirection: (tab: TabId, label?: string, sectionKey?: string) => string;
   removeDirection: (tab: TabId, directionId: string) => void;
   updateVision: (directionId: string, patch: Partial<Vision>) => void;
 
-  // goals & boards
   updateGoal: (id: string, patch: Partial<GoalNode>) => void;
   addChildGoal: (parentId: string, title?: string) => string;
   addSiblingGoal: (nodeId: string, title?: string) => string;
@@ -121,10 +118,20 @@ type Store = {
   upsertBoardForGoal: (goalId: string) => void;
   rebalanceBoard: (tab: TabId, horizon: Horizon) => void;
 
-  // planner API
   generatePlannerActionsForWeek: (weekKey?: string) => void;
   movePlannerAction: (id: string, upd: Partial<Pick<PlannerAction, "day"|"start"|"order">>) => void;
   updatePlannerAction: (id: string, patch: Partial<PlannerAction>) => void;
+
+  /** SLOT HELPERS (for planner/editor UIs) */
+  isSlotFree: (day: 0|1|2|3|4|5|6, startHHMM: string, durationMin: number, excludeId?: string) => boolean;
+  findNextFreeSlot: (
+    day: 0|1|2|3|4|5|6,
+    startHHMM: string,
+    durationMin: number,
+    direction: "down" | "up",
+    snap?: number,
+    excludeId?: string
+  ) => string;
 };
 
 export const useStore = create<Store>((set, get) => ({
@@ -141,36 +148,28 @@ export const useStore = create<Store>((set, get) => ({
   visionTab: {},
   visionSection: {},
 
-  // UI state
   openRubricForGoalId: null,
   setOpenRubricForGoalId: (id) => set(() => ({ openRubricForGoalId: id })),
   openActive13ForGoalId: null,
   setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
 
-  // planner
   plannerActions: [],
 
   visibleVisionsForTab: (tab, sectionKey) => {
     const { visions, goals, visionTab, visionSection } = get();
-
-    // Explicitly assigned to tab (+section for person)
     const explicit = visions.filter((v) => {
       if (visionTab[v.id] !== tab) return false;
       if (tab === "person" && sectionKey) return visionSection[v.id] === sectionKey;
-      if (tab === "person" && !sectionKey) return false; // person always needs section scoping
+      if (tab === "person" && !sectionKey) return false;
       return true;
     });
-
-    // Inferred (has any goal under tab and (if person) section)
     const inferred = visions.filter((v) => {
       const byTab = goals.some((g) => g.directionId === v.id && g.tabId === tab);
       if (!byTab) return false;
       if (tab !== "person") return true;
       if (!sectionKey) return false;
-      // infer section if any child goal has a tag we can’t know; we rely on explicit section assignment
       return visionSection[v.id] === sectionKey;
     });
-
     const byId: Record<string, Vision> = {};
     [...explicit, ...inferred].forEach((v) => (byId[v.id] = v));
     return Object.values(byId);
@@ -268,7 +267,6 @@ export const useStore = create<Store>((set, get) => ({
         }
       }
 
-      // also remove any boards belonging to that direction's tab (safe coarse cleanup)
       const boards = state.boards.filter((b) => !b.tabId.startsWith(tab));
 
       return {
@@ -343,7 +341,7 @@ export const useStore = create<Store>((set, get) => ({
 
     set((state) => ({
       goals: state.goals.filter((g) => !toDelete.has(g.id)),
-      boards: state.boards.filter((b) => !toDelete.has(b.id)), // board id = goalId
+      boards: state.boards.filter((b) => !toDelete.has(b.id)),
       plannerActions: state.plannerActions.filter((p) => !toDelete.has(p.goalId)),
     }));
   },
@@ -355,12 +353,10 @@ export const useStore = create<Store>((set, get) => ({
 
     const h = g.horizon as Horizon | undefined;
     if (!h || h === "other") {
-      // remove board item if exists
       set((s) => ({ boards: s.boards.filter((b) => b.id !== goalId) }));
       return;
     }
 
-    // Person has no annual board
     if (g.tabId === "person" && h === "12+") {
       set((s) => ({ boards: s.boards.filter((b) => b.id !== goalId) }));
       return;
@@ -372,9 +368,8 @@ export const useStore = create<Store>((set, get) => ({
 
     const score = scoreFromInputs(g.rubricInputs as ScoreInputs | undefined);
 
-    // Upsert
     const nextCard: BoardCard = {
-      id: goalId, // 1:1 mapping
+      id: goalId,
       tabId: key,
       status: "dormant",
       title: g.title,
@@ -390,7 +385,6 @@ export const useStore = create<Store>((set, get) => ({
       return { boards };
     });
 
-    // rebalance
     get().rebalanceBoard(g.tabId, h);
   },
 
@@ -399,7 +393,6 @@ export const useStore = create<Store>((set, get) => ({
     const caps = CAPS[key];
     if (!caps) return;
 
-    // Sort by score desc (undefined score at bottom)
     const items = get()
       .boards
       .filter((b) => b.tabId === key)
@@ -425,80 +418,217 @@ export const useStore = create<Store>((set, get) => ({
     }));
   },
 
+  // ---------- SLOT HELPERS ----------
+  isSlotFree: (day, startHHMM, durationMin, excludeId) => {
+    const start = timeToMin(startHHMM);
+    const end = start + Math.max(1, durationMin);
+    const { plannerActions } = get();
+    const sameDay = plannerActions.filter(a => a.day === day && a.id !== excludeId);
+    return !sameDay.some(a => {
+      const s = a.start ? timeToMin(a.start) : null;
+      if (s == null) return false; // floating items without start don't block until placed
+      const e = s + Math.max(1, a.durationMin);
+      return !(end <= s || start >= e); // overlap if ranges intersect
+    });
+  },
+
+  findNextFreeSlot: (day, startHHMM, durationMin, direction, snap = 15, excludeId) => {
+    const start0 = timeToMin(startHHMM);
+    const dur = Math.max(1, durationMin);
+    const clamp = (m:number) => Math.max(5*60, Math.min(23*60 - snap, m)); // keep within 05:00–23:00 window
+    let cur = clamp(start0);
+    const step = Math.max(1, snap);
+    const { plannerActions } = get();
+
+    const intervals = plannerActions
+      .filter(a => a.day === day && a.id !== excludeId && a.start)
+      .map(a => {
+        const s = timeToMin(a.start as string);
+        return [s, s + Math.max(1, a.durationMin)] as [number, number];
+      })
+      .sort((a,b) => a[0]-b[0]);
+
+    const collides = (m:number) => {
+      const start = m, end = m + dur;
+      return intervals.some(([s,e]) => !(end <= s || start >= e));
+    };
+
+    if (!collides(cur)) return minToTime(cur);
+
+    if (direction === "down") {
+      // move to just after any interval we intersect, keep going until clear
+      let moved = false;
+      while (true) {
+        let bumped = false;
+        for (const [s,e] of intervals) {
+          if (!(cur + dur <= s || cur >= e)) {
+            cur = Math.max(cur, e);
+            cur = Math.ceil(cur/step)*step;
+            cur = clamp(cur);
+            bumped = true; moved = true;
+          }
+        }
+        if (!bumped) break;
+        if (!collides(cur)) break;
+      }
+      return minToTime(cur);
+    } else {
+      // up: land just before the blocking interval
+      while (true) {
+        let bumped = false;
+        for (let i = intervals.length-1; i>=0; i--) {
+          const [s,e] = intervals[i];
+          if (!(cur + dur <= s || cur >= e)) {
+            cur = Math.min(cur, s - dur);
+            cur = Math.floor(cur/step)*step;
+            cur = clamp(cur);
+            bumped = true;
+          }
+        }
+        if (!bumped) break;
+        if (!collides(cur)) break;
+      }
+      return minToTime(cur);
+    }
+  },
+
   // ---------- planner ----------
   generatePlannerActionsForWeek: (weekKey) => {
-    const wk = weekKey || getWeekKey();
-    const { boards, goals } = get();
+  const wk = weekKey || getWeekKey();
+  const state = get();
+  const { boards, goals, settings } = state;
+  const snap = settings.snapMinutes || 15;
 
-    // Only active 1–3 items
-    const active13 = boards.filter(b => b.tabId.endsWith("-13") && b.status === "active");
+  // Helper accessors from inside the store
+  const findNextFreeSlot = state.findNextFreeSlot;
 
-    const newly: PlannerAction[] = [];
-    for (const card of active13) {
-      const g = goals.find(x => x.id === card.id);
-      if (!g || !g.actionsTemplate || g.actionsTemplate.length === 0) continue;
+  // 1) Compute the "desired instances" for this week from active 1–3 boards.
+  type Desired = {
+    sig: string;                 // goalId|templateKey|day
+    goalId: string;
+    templateKey: string;
+    label: string;
+    day: 0|1|2|3|4|5|6;
+    durationMin: number;
+    start: string | null;        // explicit for specific, null for floating
+    fixed: boolean;
+  };
 
-      for (const t of g.actionsTemplate) {
-        if (t.mode === "specific") {
-          if (t.durationMin && typeof t.day === "number") {
-            newly.push({
-              id: uid(),
-              weekKey: wk,
-              goalId: g.id,
-              templateKey: t.key,
-              label: t.label,
-              day: t.day,
-              durationMin: clamp01to59(t.durationMin),
-              start: t.start ?? null,
-              ifThenYet: t.ifThenYet,
-              rationale: t.rationale,
-              order: 0,
-              fixed: !!t.start, // SPECIFIC with explicit time => fixed
-            });
-          }
-          continue;
-        }
-        // frequency
-        if (t.mode === "frequency" && t.durationMin && (t.frequencyPerWeek || 0) > 0) {
-          const freq = Math.max(1, Math.min(7, Math.round(t.frequencyPerWeek as number)));
-          let days = (t.preferredDays && t.preferredDays.length)
-            ? t.preferredDays.slice(0)
-            : [1,3,5,0,2,4,6]; // M/W/F bias then others
-          // expand/cycle to freq
-          const picks: number[] = [];
-          let i = 0;
-          while (picks.length < freq) {
-            picks.push(days[i % days.length] as number);
-            i++;
-          }
-          for (const d of picks) {
-            newly.push({
-              id: uid(),
-              weekKey: wk,
-              goalId: g.id,
-              templateKey: t.key,
-              label: t.label,
-              day: (d as 0|1|2|3|4|5|6),
-              durationMin: clamp01to59(t.durationMin),
-              start: t.preferredStart ?? null,
-              ifThenYet: t.ifThenYet,
-              rationale: t.rationale,
-              order: 0,
-              fixed: false, // FREQUENCY items are floating even if preferredStart exists
-            });
-          }
+  const desired: Desired[] = [];
+  const active13 = boards.filter(b => b.tabId.endsWith("-13") && b.status === "active");
+
+  for (const card of active13) {
+    const g = goals.find(x => x.id === card.id);
+    if (!g || !g.actionsTemplate || g.actionsTemplate.length === 0) continue;
+
+    for (const t of g.actionsTemplate) {
+      const dur = Math.max(1, Math.min(59, t.durationMin || 0));
+      if (!dur) continue;
+
+      if (t.mode === "specific") {
+        if (typeof t.day !== "number") continue;
+        const d = t.day as 0|1|2|3|4|5|6;
+        desired.push({
+          sig: `${g.id}|${t.key}|${d}`,
+          goalId: g.id,
+          templateKey: t.key,
+          label: t.label,
+          day: d,
+          durationMin: dur,
+          start: t.start ?? null,
+          fixed: !!t.start,
+        });
+        continue;
+      }
+
+      if (t.mode === "frequency" && (t.frequencyPerWeek || 0) > 0) {
+        const freq = Math.max(1, Math.min(7, Math.round(t.frequencyPerWeek as number)));
+        let days = (t.preferredDays && t.preferredDays.length)
+          ? t.preferredDays.slice(0)
+          : [1,3,5,0,2,4,6]; // M/W/F bias
+        const picks: number[] = [];
+        let i = 0;
+        while (picks.length < freq) { picks.push(days[i % days.length] as number); i++; }
+        for (const d of picks) {
+          const day = d as 0|1|2|3|4|5|6;
+          desired.push({
+            sig: `${g.id}|${t.key}|${day}`,
+            goalId: g.id,
+            templateKey: t.key,
+            label: t.label,
+            day,
+            durationMin: dur,
+            start: null,     // floating
+            fixed: false,
+          });
         }
       }
     }
+  }
 
-    // Remove any existing instances for this week (re-gen fresh)
-    set((s) => ({
-      plannerActions: [
-        ...s.plannerActions.filter(p => p.weekKey !== wk),
-        ...newly
-      ]
-    }));
-  },
+  // 2) Partition current week actions: keep map by signature.
+  const existingWeek = state.plannerActions.filter(p => p.weekKey === wk);
+  const existingBySig = new Map<string, typeof existingWeek[number]>();
+  for (const a of existingWeek) {
+    existingBySig.set(`${a.goalId}|${a.templateKey}|${a.day}`, a);
+  }
+
+  // 3) Build the next week set: keep existing where possible, add missing ones only.
+  const next: typeof existingWeek = [];
+
+  // Occupancy helper uses current 'next' content for conflict-free placement.
+  const placeNonOverlapping = (day: 0|1|2|3|4|5|6, durationMin: number, startHint: string | null, fixed: boolean, excludeId?: string) => {
+    const start = findNextFreeSlot(day, startHint ?? "05:00", durationMin, "down", snap, excludeId);
+    return { start, fixed };
+  };
+
+  // Keep existing (update label/duration/fixed but preserve start)
+  for (const d of desired) {
+    const ex = existingBySig.get(d.sig);
+    if (ex) {
+      next.push({
+        ...ex,
+        label: d.label,
+        durationMin: d.durationMin,
+        fixed: d.fixed ? true : false,               // if now specific with explicit time, lock
+        // keep ex.start as-is (preserve user placement)
+      });
+      existingBySig.delete(d.sig);
+    }
+  }
+
+  // Add only the missing desired items
+  for (const d of desired) {
+    if ([...next, ...existingWeek].some(a => `${a.goalId}|${a.templateKey}|${a.day}` === d.sig)) {
+      // already present (kept above)
+      continue;
+    }
+    const placed = placeNonOverlapping(d.day, d.durationMin, d.start, d.fixed);
+    next.push({
+      id: Math.random().toString(36).slice(2, 10),
+      weekKey: wk,
+      goalId: d.goalId,
+      templateKey: d.templateKey,
+      label: d.label,
+      day: d.day,
+      durationMin: d.durationMin,
+      start: placed.start,
+      ifThenYet: undefined,
+      rationale: undefined,
+      order: 0,
+      fixed: d.fixed, // fixed if specific with explicit time
+    });
+  }
+
+  // 4) Replace ONLY this week's items with reconciled set.
+  set((s) => ({
+    plannerActions: [
+      ...s.plannerActions.filter(p => p.weekKey !== wk),
+      ...next
+    ]
+  }));
+},
+
 
   movePlannerAction: (id, upd) =>
     set((s) => ({
