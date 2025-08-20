@@ -4,19 +4,24 @@ import { useStore } from "@/state/useStore";
 import type { PlannerAction } from "@/domain/types";
 
 /**
- * Google Calendar–style week view (scrollable & zoomed):
- * - 7 columns (respects prefs.startOfWeek for header)
- * - Scrollable hours
+ * Google Calendar–style week view (scrollable & zoomed)
  * - Floating actions (fixed === false) can be dragged vertically any number of times
  * - Fixed actions (fixed === true) are not draggable
- * - Past days are locked (not draggable)
+ * - Optional lock for past days (configurable below)
+ *
+ * FIXES kept from previous patch:
+ * - Correct column→weekday mapping when startOfWeek !== 0
+ * - Past-day lock uses numeric timestamps (not string compare)
  */
 
 // --------- tune these if desired ----------
 const DAY_START_HOUR = 5;    // grid top (inclusive)
 const DAY_END_HOUR   = 23;   // grid bottom (exclusive)
-const PX_PER_HOUR    = 60;   // ZOOM: 60px per hour (bigger = more zoom)
+const PX_PER_HOUR    = 60;   // zoom level (px per hour)
 const VIEWPORT_H     = 720;  // grid viewport height (px), scrollable
+
+// NEW: toggle whether past days are locked (default OFF so you can drag any day)
+const LOCK_PAST_DAYS = false;
 // ------------------------------------------
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -58,25 +63,13 @@ export default function PlannerWeek() {
 
   const days = useMemo(() => getWeekDays(startOfWeek), [startOfWeek]);
 
-  // past day lock
-  const todayYMD = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  })();
-  const isPastDay = (dayIdx: number) => {
-    const d = days[dayIdx];
-    const ymd = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    return ymd < todayYMD;
-  };
-
-  // derive events per day
-  const actionsByDay = useMemo(() => {
+  // Bucket by real weekday (0=Sun..6=Sat) taken from action.day
+  const actionsByDow = useMemo(() => {
     const map: Record<number, PlannerAction[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     for (const a of plannerActions) {
-      map[a.day] = map[a.day] || [];
-      map[a.day].push(a);
+      const d = a.day as 0|1|2|3|4|5|6;
+      (map[d] ||= []).push(a);
     }
-    // stable order within day: fixed first by start time asc, then floaters by label
     (Object.keys(map) as unknown as number[]).forEach((d) => {
       map[d].sort((A, B) => {
         const aFixed = !!A.fixed;
@@ -93,6 +86,20 @@ export default function PlannerWeek() {
     return map;
   }, [plannerActions]);
 
+  // Past day lock (toggle-able)
+  const todayMidnight = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const isPastDay = (colIdx: number) => {
+    if (!LOCK_PAST_DAYS) return false;
+    const d = days[colIdx];
+    const t = new Date(d);
+    t.setHours(0, 0, 0, 0);
+    return t.getTime() < todayMidnight;
+  };
+
   // grid metrics
   const totalHours = DAY_END_HOUR - DAY_START_HOUR;
   const pxPerMin = PX_PER_HOUR / 60;
@@ -100,15 +107,17 @@ export default function PlannerWeek() {
   // dragging state (for a single item)
   const [drag, setDrag] = useState<{
     id: string;
-    day: number;
-    startAtDragMin: number; // item's starting minutes when drag began
-    offsetY: number;        // px offset since drag start
+    colIdx: number;          // visible column index (0..6)
+    startAtDragMin: number;  // item's starting minutes when drag began
+    offsetY: number;         // px offset since drag start
   } | null>(null);
 
   const onPointerDown = useCallback(
-    (e: React.PointerEvent, action: PlannerAction, dayIdx: number) => {
-      if (action.fixed) return;           // fixed: never draggable
-      if (isPastDay(dayIdx)) return;      // past day: lock
+    (e: React.PointerEvent, action: PlannerAction, colIdx: number) => {
+      // fixed items are not draggable; past days locked (if enabled)
+      if (action.fixed) return;
+      if (isPastDay(colIdx)) return;
+
       const target = e.currentTarget as HTMLDivElement;
       const column = target.parentElement as HTMLDivElement; // day column
       const colRect = column.getBoundingClientRect();
@@ -122,7 +131,7 @@ export default function PlannerWeek() {
 
       setDrag({
         id: action.id,
-        day: dayIdx,
+        colIdx,
         startAtDragMin: fromMin,
         offsetY: 0,
       });
@@ -151,7 +160,7 @@ export default function PlannerWeek() {
         DAY_END_HOUR * 60 - snap,
         Math.max(DAY_START_HOUR * 60, drag.startAtDragMin + movedMin)
       );
-      // set the item's time; keep it FLOATING (fixed=false) so it remains draggable later
+      // keep floating (fixed=false) so it stays draggable later
       updatePlannerAction(drag.id, { start: minToTime(nextMinClamped), fixed: false });
       setDrag(null);
       e.preventDefault();
@@ -173,7 +182,7 @@ export default function PlannerWeek() {
     <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3">
       <div className="flex items-center justify-between mb-2">
         <div className="font-semibold">Weekly Planner</div>
-        <div className="text-xs text-slate-400">Snap: {snap} min</div>
+        <div className="text-xs text-slate-400">Snap: {settings.snapMinutes} min</div>
       </div>
 
       {/* header row */}
@@ -208,12 +217,14 @@ export default function PlannerWeek() {
         </div>
 
         {/* day columns */}
-        {days.map((_, dayIdx) => {
-          const items = actionsByDay[dayIdx] || [];
-          const locked = isPastDay(dayIdx);
+        {days.map((_, colIdx) => {
+          // Map visible column to actual weekday (0=Sun..6=Sat)
+          const displayDow = (startOfWeek + colIdx) % 7;
+          const items = actionsByDow[displayDow] || [];
+          const lockedDay = isPastDay(colIdx);
 
           return (
-            <div key={dayIdx} className="relative border-l border-slate-600/40">
+            <div key={colIdx} className="relative border-l border-slate-600/40">
               {/* background hour lines */}
               <div className="absolute left-0 right-0" style={{ height: totalHours * PX_PER_HOUR }}>
                 {ticks.map((t) => (
@@ -236,7 +247,8 @@ export default function PlannerWeek() {
                     : (topMin * pxPerMin);
 
                 const heightPx = Math.max(PX_PER_HOUR * (durMin / 60), 18);
-                const fixed = !!a.fixed || locked;
+                // Only fixed items lock; past-day lock applies if enabled
+                const fixed = !!a.fixed || lockedDay;
 
                 return (
                   <div
@@ -247,10 +259,10 @@ export default function PlannerWeek() {
                         : "bg-indigo-600/90 text-white cursor-grab active:cursor-grabbing"}
                     `}
                     style={{ top: Math.max(0, topPx), height: heightPx }}
-                    onPointerDown={(e) => onPointerDown(e, a, dayIdx)}
+                    onPointerDown={(e) => onPointerDown(e, a, colIdx)}
                     title={
                       fixed
-                        ? `${a.label} • ${a.start ?? "—"} • ${durMin}m (locked${locked ? " – past day" : ""})`
+                        ? `${a.label} • ${a.start ?? "—"} • ${durMin}m${lockedDay ? " (locked – past day)" : " (fixed)"}`
                         : `${a.label} • ${a.start ?? "(time: drag to set)"} • ${durMin}m`
                     }
                   >
