@@ -1,74 +1,270 @@
 "use client";
-import { useMemo } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { useStore } from "@/state/useStore";
-import PlannerActionCard from "@/components/PlannerActionCard";
+import type { PlannerAction } from "@/domain/types";
 
-const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/**
+ * Google Calendar–style week view (scrollable & zoomed):
+ * - 7 columns (respects prefs.startOfWeek for header)
+ * - Scrollable hours
+ * - Floating actions (fixed === false) can be dragged vertically any number of times
+ * - Fixed actions (fixed === true) are not draggable
+ * - Past days are locked (not draggable)
+ */
+
+// --------- tune these if desired ----------
+const DAY_START_HOUR = 5;    // grid top (inclusive)
+const DAY_END_HOUR   = 23;   // grid bottom (exclusive)
+const PX_PER_HOUR    = 60;   // ZOOM: 60px per hour (bigger = more zoom)
+const VIEWPORT_H     = 720;  // grid viewport height (px), scrollable
+// ------------------------------------------
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const timeToMin = (t: string) => {
+  const [h, m] = t.split(":").map((x) => parseInt(x, 10));
+  return (isFinite(h) ? h : 0) * 60 + (isFinite(m) ? m : 0);
+};
+const minToTime = (mTotal: number) => {
+  const m = ((mTotal % (24 * 60)) + 24 * 60) % (24 * 60);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${pad2(h)}:${pad2(mm)}`;
+};
+
+function getWeekDays(startOfWeek: number): Date[] {
+  const now = new Date();
+  const todayDow = now.getDay(); // 0..6 (Sun..Sat)
+  const diff = ((todayDow - startOfWeek) + 7) % 7;
+  const start = new Date(now);
+  start.setDate(now.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  return new Array(7).fill(0).map((_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+}
 
 export default function PlannerWeek() {
-  const { plannerActions, prefs } = useStore();
+  const {
+    plannerActions,
+    updatePlannerAction,
+    prefs,
+    settings,
+  } = useStore();
 
-  const byDay = useMemo(() => {
-    const grouped: Record<number, any[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-    for (const a of plannerActions) grouped[a.day].push(a);
-    for (const d of Object.keys(grouped)) {
-      grouped[+d] = grouped[+d].sort((a, b) => {
-        const sa = a.start ? a.start : "";
-        const sb = b.start ? b.start : "";
-        if (!sa && !sb) return (a.order || 0) - (b.order || 0);
-        if (!sa) return -1; // floating first
-        if (!sb) return 1;
-        return sa.localeCompare(sb);
-      });
+  const snap = settings.snapMinutes; // 15/30 etc.
+  const startOfWeek = prefs.startOfWeek ?? 0;
+
+  const days = useMemo(() => getWeekDays(startOfWeek), [startOfWeek]);
+
+  // past day lock
+  const todayYMD = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  })();
+  const isPastDay = (dayIdx: number) => {
+    const d = days[dayIdx];
+    const ymd = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    return ymd < todayYMD;
+  };
+
+  // derive events per day
+  const actionsByDay = useMemo(() => {
+    const map: Record<number, PlannerAction[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    for (const a of plannerActions) {
+      map[a.day] = map[a.day] || [];
+      map[a.day].push(a);
     }
-    return grouped;
+    // stable order within day: fixed first by start time asc, then floaters by label
+    (Object.keys(map) as unknown as number[]).forEach((d) => {
+      map[d].sort((A, B) => {
+        const aFixed = !!A.fixed;
+        const bFixed = !!B.fixed;
+        if (aFixed && bFixed) {
+          const as = A.start ? timeToMin(A.start) : 0;
+          const bs = B.start ? timeToMin(B.start) : 0;
+          return as - bs;
+        }
+        if (aFixed !== bFixed) return aFixed ? -1 : 1;
+        return A.label.localeCompare(B.label);
+      });
+    });
+    return map;
   }, [plannerActions]);
 
+  // grid metrics
+  const totalHours = DAY_END_HOUR - DAY_START_HOUR;
+  const pxPerMin = PX_PER_HOUR / 60;
+
+  // dragging state (for a single item)
+  const [drag, setDrag] = useState<{
+    id: string;
+    day: number;
+    startAtDragMin: number; // item's starting minutes when drag began
+    offsetY: number;        // px offset since drag start
+  } | null>(null);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent, action: PlannerAction, dayIdx: number) => {
+      if (action.fixed) return;           // fixed: never draggable
+      if (isPastDay(dayIdx)) return;      // past day: lock
+      const target = e.currentTarget as HTMLDivElement;
+      const column = target.parentElement as HTMLDivElement; // day column
+      const colRect = column.getBoundingClientRect();
+      const itemRect = target.getBoundingClientRect();
+      const yWithin = itemRect.top - colRect.top; // px from column top to item top
+
+      // if item has a start -> use it; else derive from its y position
+      const fromMin = (action.start != null)
+        ? timeToMin(action.start)
+        : Math.round((yWithin / pxPerMin + DAY_START_HOUR * 60) / snap) * snap;
+
+      setDrag({
+        id: action.id,
+        day: dayIdx,
+        startAtDragMin: fromMin,
+        offsetY: 0,
+      });
+
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [pxPerMin, snap]
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!drag) return;
+      setDrag((prev) => (prev ? { ...prev, offsetY: prev.offsetY + e.movementY } : prev));
+      e.preventDefault();
+    },
+    [drag]
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!drag) return;
+      const movedMin = Math.round((drag.offsetY / pxPerMin) / snap) * snap;
+      const nextMinClamped = Math.min(
+        DAY_END_HOUR * 60 - snap,
+        Math.max(DAY_START_HOUR * 60, drag.startAtDragMin + movedMin)
+      );
+      // set the item's time; keep it FLOATING (fixed=false) so it remains draggable later
+      updatePlannerAction(drag.id, { start: minToTime(nextMinClamped), fixed: false });
+      setDrag(null);
+      e.preventDefault();
+    },
+    [drag, pxPerMin, snap, updatePlannerAction]
+  );
+
+  // hour ticks
+  const ticks: { time: string; top: number }[] = useMemo(() => {
+    const out: { time: string; top: number }[] = [];
+    for (let h = DAY_START_HOUR; h <= DAY_END_HOUR; h++) {
+      const top = (h - DAY_START_HOUR) * PX_PER_HOUR;
+      out.push({ time: `${pad2(h)}:00`, top });
+    }
+    return out;
+  }, []);
+
   return (
-    <section className="rounded-2xl border border-slate-300 bg-white p-4">
-      <header className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-slate-900">Weekly Planner</h3>
-        <div className="text-xs text-slate-700">Snap: {prefs.plannerGridMinutes} min</div>
-      </header>
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold">Weekly Planner</div>
+        <div className="text-xs text-slate-400">Snap: {snap} min</div>
+      </div>
 
-      <div className="grid grid-cols-7 gap-3">
-        {dayNames.map((d, i) => {
-          const floating = byDay[i].filter((a) => !a.start);
-          const scheduled = byDay[i].filter((a) => !!a.start);
+      {/* header row */}
+      <div className="grid grid-cols-8 gap-2 text-xs mb-2">
+        <div className="text-right pr-2 text-slate-400">Time</div>
+        {days.map((d, i) => (
+          <div key={i} className="text-center font-medium">
+            {d.toLocaleDateString(undefined, { weekday: "short" })}
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="grid grid-cols-8 gap-2 overflow-y-auto"
+        style={{ height: `${VIEWPORT_H}px` }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        {/* time ruler */}
+        <div className="relative">
+          <div className="relative" style={{ height: totalHours * PX_PER_HOUR }}>
+            {ticks.map((t) => (
+              <div
+                key={t.time}
+                className="absolute -top-2 right-2 text-[10px] text-slate-400 select-none"
+                style={{ top: t.top }}
+              >
+                {t.time}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* day columns */}
+        {days.map((_, dayIdx) => {
+          const items = actionsByDay[dayIdx] || [];
+          const locked = isPastDay(dayIdx);
+
           return (
-            <div
-              key={d}
-              className="rounded-xl border border-slate-300 bg-slate-50 p-2"
-            >
-              <div className="font-semibold text-slate-900 mb-2">{d}</div>
-
-              {/* Floating */}
-              <div className="mb-3">
-                <div className="text-xs text-slate-700 mb-1">Unscheduled</div>
-                <div className="space-y-2">
-                  {floating.length ? (
-                    floating.map((a: any) => <PlannerActionCard key={a.id} action={a} />)
-                  ) : (
-                    <div className="text-xs text-slate-500">None</div>
-                  )}
-                </div>
+            <div key={dayIdx} className="relative border-l border-slate-600/40">
+              {/* background hour lines */}
+              <div className="absolute left-0 right-0" style={{ height: totalHours * PX_PER_HOUR }}>
+                {ticks.map((t) => (
+                  <div
+                    key={t.time}
+                    className="absolute left-0 right-0 border-t border-dashed border-slate-600/40"
+                    style={{ top: t.top }}
+                  />
+                ))}
               </div>
 
-              {/* Scheduled */}
-              <div>
-                <div className="text-xs text-slate-700 mb-1">Scheduled</div>
-                <div className="space-y-2">
-                  {scheduled.length ? (
-                    scheduled.map((a: any) => <PlannerActionCard key={a.id} action={a} />)
-                  ) : (
-                    <div className="text-xs text-slate-500">None</div>
-                  )}
-                </div>
-              </div>
+              {/* actions */}
+              {items.map((a) => {
+                const durMin = Math.max(1, Math.min(59, a.durationMin));
+                const startMin = a.start ? timeToMin(a.start) : DAY_START_HOUR * 60;
+                const topMin = startMin - DAY_START_HOUR * 60;
+                const topPx =
+                  (drag && drag.id === a.id)
+                    ? (topMin * pxPerMin + drag.offsetY)
+                    : (topMin * pxPerMin);
+
+                const heightPx = Math.max(PX_PER_HOUR * (durMin / 60), 18);
+                const fixed = !!a.fixed || locked;
+
+                return (
+                  <div
+                    key={a.id}
+                    className={`absolute left-1 right-1 rounded-md px-2 py-1 text-xs shadow
+                      ${fixed
+                        ? "bg-slate-600/80 text-white cursor-not-allowed"
+                        : "bg-indigo-600/90 text-white cursor-grab active:cursor-grabbing"}
+                    `}
+                    style={{ top: Math.max(0, topPx), height: heightPx }}
+                    onPointerDown={(e) => onPointerDown(e, a, dayIdx)}
+                    title={
+                      fixed
+                        ? `${a.label} • ${a.start ?? "—"} • ${durMin}m (locked${locked ? " – past day" : ""})`
+                        : `${a.label} • ${a.start ?? "(time: drag to set)"} • ${durMin}m`
+                    }
+                  >
+                    <div className="font-semibold truncate">{a.label}</div>
+                    <div className="opacity-80">
+                      {(a.start ?? "(time: drag to set)")} • {durMin}m
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }

@@ -453,6 +453,7 @@ export const useStore = create<Store>((set, get) => ({
               ifThenYet: t.ifThenYet,
               rationale: t.rationale,
               order: 0,
+              fixed: !!t.start, // SPECIFIC with explicit time => fixed
             });
           }
           continue;
@@ -483,6 +484,7 @@ export const useStore = create<Store>((set, get) => ({
               ifThenYet: t.ifThenYet,
               rationale: t.rationale,
               order: 0,
+              fixed: false, // FREQUENCY items are floating even if preferredStart exists
             });
           }
         }
