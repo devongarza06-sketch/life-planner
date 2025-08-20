@@ -6,6 +6,8 @@ import Modal from "@/components/Modal";
 
 type Props = {
   tab: TabId;
+  /** Optional: scope to a Person section (e.g., 'physical'). */
+  sectionKey?: string;
 };
 
 const VALUES_LIST = [
@@ -20,9 +22,13 @@ const VALUES_LIST = [
   "Excellence",
 ];
 
-export default function VisionBoxes({ tab }: Props) {
-  const { selected, visions } = useStore();
-  const directionId = selected[tab] ?? null;
+export default function VisionBoxes({ tab, sectionKey }: Props) {
+  const { selected, selectedPerson, visions } = useStore();
+
+  const directionId =
+    tab === "person" && sectionKey
+      ? selectedPerson[sectionKey] ?? null
+      : selected[tab] ?? null;
 
   const vision: Vision | undefined = useMemo(
     () => visions.find((v) => v.id === directionId),
@@ -50,6 +56,7 @@ export default function VisionBoxes({ tab }: Props) {
         prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
       );
     } else {
+      // FIX: .prev -> ...prev
       setPersonalValues((prev) =>
         prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
       );
@@ -147,105 +154,81 @@ export default function VisionBoxes({ tab }: Props) {
         </div>
       </div>
 
-      {/* Editor Modal (per side), force readable text */}
       <Modal
-        open={open !== null}
+        open={!!open}
         onClose={() => setOpen(null)}
-        title={
-          open === "legacy"
-            ? `Edit Legacy Vision — ${vision.label}`
-            : open === "personal"
-            ? `Edit Personal Vision — ${vision.label}`
-            : "Edit"
-        }
-        actions={
-          <>
+        title={open === "legacy" ? "Edit Legacy Vision" : "Edit Personal Vision"}
+      >
+        <div className="space-y-3">
+          {open === "legacy" ? (
+            <>
+              <textarea
+                className="w-full rounded border border-slate-600 bg-slate-800 p-2"
+                rows={3}
+                placeholder="Who I’m known as / actions others see me do…"
+                value={legacyText}
+                onChange={(e) => setLegacyText(e.target.value)}
+              />
+              <div className="text-sm">Values</div>
+              <div className="flex flex-wrap gap-2">
+                {VALUES_LIST.map((v) => (
+                  <button
+                    key={`lv-opt-${v}`}
+                    onClick={() => toggleValue("legacy", v)}
+                    className={`px-2 py-0.5 rounded-full border text-xs ${
+                      legacyValues.includes(v)
+                        ? "border-indigo-400 bg-indigo-500/20"
+                        : "border-slate-600 bg-slate-800"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <textarea
+                className="w-full rounded border border-slate-600 bg-slate-800 p-2"
+                rows={3}
+                placeholder="Why it matters to me / impact I want…"
+                value={personalText}
+                onChange={(e) => setPersonalText(e.target.value)}
+              />
+              <div className="text-sm">Values</div>
+              <div className="flex flex-wrap gap-2">
+                {VALUES_LIST.map((v) => (
+                  <button
+                    key={`pv-opt-${v}`}
+                    onClick={() => toggleValue("personal", v)}
+                    className={`px-2 py-0.5 rounded-full border text-xs ${
+                      personalValues.includes(v)
+                        ? "border-indigo-400 bg-indigo-500/20"
+                        : "border-slate-600 bg-slate-800"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
             <button
+              className="px-3 py-1 rounded border border-slate-600"
               onClick={() => setOpen(null)}
-              className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
+              className="px-3 py-1 rounded bg-indigo-600 text-white"
               onClick={save}
-              className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700"
             >
               Save
             </button>
-          </>
-        }
-      >
-        {open === "legacy" && (
-          <div className="grid gap-3 text-slate-800">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Legacy Vision</div>
-              <textarea
-                value={legacyText}
-                onChange={(e) => setLegacyText(e.target.value)}
-                className="w-full min-h-[100px] rounded border p-2 text-sm text-slate-900 placeholder:text-slate-400"
-                placeholder="How others will see me and what I’ll be recognized for…"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Legacy Values</div>
-              <div className="flex flex-wrap gap-2">
-                {VALUES_LIST.map((v) => {
-                  const on = legacyValues.includes(v);
-                  return (
-                    <button
-                      type="button"
-                      key={`lv-opt-${v}`}
-                      onClick={() => toggleValue("legacy", v)}
-                      className={`px-2 py-0.5 text-xs rounded-full border ${
-                        on
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-white text-slate-800"
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
-        )}
-
-        {open === "personal" && (
-          <div className="grid gap-3 text-slate-800">
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Personal Vision</div>
-              <textarea
-                value={personalText}
-                onChange={(e) => setPersonalText(e.target.value)}
-                className="w-full min-h-[100px] rounded border p-2 text-sm text-slate-900 placeholder:text-slate-400"
-                placeholder="What this means for me; the impact I want to have…"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-slate-600 mb-1">Personal Values</div>
-              <div className="flex flex-wrap gap-2">
-                {VALUES_LIST.map((v) => {
-                  const on = personalValues.includes(v);
-                  return (
-                    <button
-                      type="button"
-                      key={`pv-opt-${v}`}
-                      onClick={() => toggleValue("personal", v)}
-                      className={`px-2 py-0.5 text-xs rounded-full border ${
-                        on
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-white text-slate-800"
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </Modal>
     </>
   );

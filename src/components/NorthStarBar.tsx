@@ -7,28 +7,33 @@ import { Minus, Plus } from "lucide-react";
 
 type Props = {
   tab: TabId;
+  /** Optional: scope to a Person section (e.g., 'physical', 'cognitive', ...) */
+  sectionKey?: string;
 };
 
-export default function NorthStarBar({ tab }: Props) {
+export default function NorthStarBar({ tab, sectionKey }: Props) {
   const {
     visibleVisionsForTab,
     selected,
+    selectedPerson,
     selectDirection,
     addDirection,
   } = useStore();
 
-  const visions = visibleVisionsForTab(tab);
-  const selectedId = selected[tab] ?? null;
+  const visions = visibleVisionsForTab(tab, sectionKey);
+  const selectedId =
+    tab === "person" && sectionKey
+      ? selectedPerson[sectionKey] ?? null
+      : selected[tab] ?? null;
 
-  // --- NEW: ensure one is always selected ---
+  // --- ensure one is always selected for the given scope ---
   useEffect(() => {
     if (!visions || visions.length === 0) return;
     const hasSelected = selectedId && visions.some((v) => v.id === selectedId);
     if (!hasSelected) {
-      // pick the first available direction for this tab
-      selectDirection(tab, visions[0].id);
+      selectDirection(tab, visions[0].id, sectionKey);
     }
-  }, [tab, visions, selectedId, selectDirection]);
+  }, [tab, visions, selectedId, selectDirection, sectionKey]);
 
   const [confirm, setConfirm] = useState<{ open: boolean; target?: Vision }>({
     open: false,
@@ -37,7 +42,7 @@ export default function NorthStarBar({ tab }: Props) {
   const onAdd = () => {
     const name = prompt("Name of the new direction (e.g., Become a Writer):");
     const label = (name ?? "").trim() || "New direction";
-    addDirection(tab, label);
+    addDirection(tab, label, sectionKey);
   };
 
   const onAskRemove = (vision: Vision) => {
@@ -49,7 +54,6 @@ export default function NorthStarBar({ tab }: Props) {
     if (!v) return setConfirm({ open: false });
     useStore.getState().removeDirection(tab, v.id);
     setConfirm({ open: false });
-    // After removal, effect above will auto-select the first remaining item (if any)
   };
 
   return (
@@ -59,7 +63,7 @@ export default function NorthStarBar({ tab }: Props) {
         return (
           <button
             key={v.id}
-            onClick={() => selectDirection(tab, v.id)}
+            onClick={() => selectDirection(tab, v.id, sectionKey)}
             className={`relative rounded-full px-3 py-1 text-sm border transition
               ${
                 isSel
