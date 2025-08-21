@@ -78,6 +78,55 @@ function getWeekKey(d = new Date()): string {
   return `${dt.getFullYear()}-${String(week).padStart(2, "0")}`;
 }
 
+/** Simple add-days returning ISO date (yyyy-mm-dd) */
+function addDaysISO(iso:string, days:number): string {
+  const [y,m,d] = iso.split("-").map(n=>parseInt(n,10));
+  const dt = new Date(y, (m-1), d);
+  dt.setDate(dt.getDate()+days);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
+}
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function daysBetween(aISO:string, bISO:string): number {
+  const [ya,ma,da] = aISO.split("-").map(n=>parseInt(n,10));
+  const [yb,mb,db] = bISO.split("-").map(n=>parseInt(n,10));
+  const a = new Date(ya,ma-1,da); a.setHours(0,0,0,0);
+  const b = new Date(yb,mb-1,db); b.setHours(0,0,0,0);
+  return Math.round((b.getTime()-a.getTime())/86400000);
+}
+
+/** PURE PLAY domain */
+export type PurePlayItem = {
+  id: string;
+  name: string;
+  // JRN 1–5 each (optional but used for ranking)
+  J?: number; R?: number; N?: number;
+  // optional suggested duration (minutes) for display/planning later
+  durationMin?: number;
+};
+
+type PurePlayState = {
+  cycleDays: number;        // 8
+  tokensPerCycle: number;   // 2
+  cycleStartISO: string;    // beginning of current window (local)
+  usedThisCycle: number;    // how many spent within window
+  feature: PurePlayItem | null;
+  lastFeatureAtISO: string | null;
+  queue: PurePlayItem[];    // incubating
+  dormant: PurePlayItem[];  // retired
+};
+
+function sortByJRNDesc(a: PurePlayItem, b: PurePlayItem) {
+  const sa = (a.J ?? 0) + (a.R ?? 0) + (a.N ?? 0);
+  const sb = (b.J ?? 0) + (b.R ?? 0) + (b.N ?? 0);
+  if (sb !== sa) return sb - sa;
+  return a.name.localeCompare(b.name);
+}
+
+
+
 // ---------- store ----------
 type Store = {
   budgets: Budget[];
@@ -99,6 +148,16 @@ type Store = {
   setOpenActive13ForGoalId: (id: string | null) => void;
 
   plannerActions: PlannerAction[];
+
+  /** PURE PLAY */
+  purePlay: PurePlayState;
+  getPurePlayTokenState: () => { remaining: number; resetsInDays: number; cycleStartISO: string };
+  resetPurePlayWindowIfNeeded: () => void;
+  addPurePlayQueueItem: (item: Omit<PurePlayItem, "id">) => void;
+  removePurePlayQueueItem: (id: string) => void;
+  movePurePlayToDormant: (id: string) => void;
+  promoteNextPurePlayCandidate: () => void;
+  usePurePlayTokenForFeature: () => { ok: boolean; reason?: string; usedId?: string };
 
   visibleVisionsForTab: (tab: TabId, sectionKey?: string) => Vision[];
   goalsForDirection: (directionId: string) => GoalNode[];
@@ -155,6 +214,155 @@ export const useStore = create<Store>((set, get) => ({
   setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
 
   plannerActions: [],
+
+  /** ---------- PURE PLAY init ---------- */
+  purePlay: {
+    cycleDays: 8,
+    tokensPerCycle: 2,
+    cycleStartISO: todayISO(),   // start today
+    usedThisCycle: 0,
+    feature: null,
+    lastFeatureAtISO: null,
+    queue: [],
+    dormant: [],
+  },
+
+  /** Compute remaining & days to reset; also auto-reset if window passed */
+  getPurePlayTokenState: () => {
+    const s = get().purePlay;
+    const today = todayISO();
+    const elapsed = daysBetween(s.cycleStartISO, today);
+    let cycleStartISO = s.cycleStartISO;
+    let used = s.usedThisCycle;
+    if (elapsed >= s.cycleDays) {
+      // reset
+      cycleStartISO = today;
+      used = 0;
+      set((state) => ({ purePlay: { ...state.purePlay, cycleStartISO, usedThisCycle: 0 }}));
+    }
+    const remaining = Math.max(0, s.tokensPerCycle - used);
+    const dayIntoCycle = Math.min(elapsed, s.cycleDays);
+    const resetsInDays = Math.max(0, s.cycleDays - dayIntoCycle);
+    return { remaining, resetsInDays, cycleStartISO };
+  },
+
+  resetPurePlayWindowIfNeeded: () => {
+    const s = get().purePlay;
+    const today = todayISO();
+    const elapsed = daysBetween(s.cycleStartISO, today);
+    if (elapsed >= s.cycleDays) {
+      set((state) => ({
+        purePlay: { ...state.purePlay, cycleStartISO: today, usedThisCycle: 0 }
+      }));
+    }
+  },
+
+  addPurePlayQueueItem: (item) =>
+    set((state) => {
+      const it = { ...item, id: uid() } as PurePlayItem;
+      const queue = [...state.purePlay.queue, it].sort(sortByJRNDesc);
+      return { purePlay: { ...state.purePlay, queue } };
+    }),
+
+  removePurePlayQueueItem: (id) =>
+    set((state) => ({
+      purePlay: { ...state.purePlay, queue: state.purePlay.queue.filter(q => q.id !== id) }
+    })),
+
+  movePurePlayToDormant: (id) =>
+    set((state) => {
+      const q = state.purePlay.queue.find(x => x.id === id);
+      const queue = state.purePlay.queue.filter(x => x.id !== id);
+      const dormant = q ? [q, ...state.purePlay.dormant] : state.purePlay.dormant;
+      return { purePlay: { ...state.purePlay, queue, dormant } };
+    }),
+
+  /** Peek top candidate by JRN and set it as 'feature' (not consuming token). */
+  promoteNextPurePlayCandidate: () =>
+    set((state) => {
+      const next = [...state.purePlay.queue].sort(sortByJRNDesc)[0] || null;
+      return { purePlay: { ...state.purePlay, feature: next } };
+    }),
+
+  /** Consume 1 token for Feature of the Week.
+   *  Rules:
+   *  - If no tokens left => fail
+   *  - If no queue items => fail
+   *  - Consume 1 token; record lastFeatureAtISO and clear current feature.
+   *  - Pop the used item out of the queue.
+   *  - Elevate next candidate by JRN (feature points at next).
+   */
+  usePurePlayTokenForFeature: () => {
+    const st = get().purePlay;
+    // reset window if needed
+    get().resetPurePlayWindowIfNeeded();
+    const { remaining } = get().getPurePlayTokenState();
+    if (remaining <= 0) return { ok:false, reason:"No tokens remaining in this 8‑day window." };
+
+    const queueSorted = [...st.queue].sort(sortByJRNDesc);
+    const useItem = st.feature ?? queueSorted[0] ?? null;
+    if (!useItem) return { ok:false, reason:"No item in queue to feature." };
+
+    // Remove used from queue
+    const nextQueue = st.queue.filter(q => q.id !== useItem.id);
+    // Compute next candidate
+    const nextCandidate = [...nextQueue].sort(sortByJRNDesc)[0] ?? null;
+
+    const today = todayISO();
+    set((state) => ({
+      purePlay: {
+        ...state.purePlay,
+        usedThisCycle: Math.min(state.purePlay.tokensPerCycle, state.purePlay.usedThisCycle + 1),
+        feature: nextCandidate,            // feature "goes away" after usage; we show the next candidate
+        lastFeatureAtISO: today,
+        queue: nextQueue,
+      }
+    }));
+    return { ok:true, usedId: useItem.id };
+  },
+
+    /** Edit Pure‑Play item details (name/J/R/N/duration) wherever it lives. */
+  updatePurePlayItem: (id: string, patch: Partial<PurePlayItem>) =>
+    set((state) => {
+      const pp = state.purePlay;
+      const apply = (arr: PurePlayItem[]) => arr.map(x => x.id === id ? { ...x, ...patch } : x);
+
+      const feature =
+        pp.feature && pp.feature.id === id ? { ...pp.feature, ...patch } : pp.feature;
+
+      // re‑rank queue by JRN after edit
+      const queue = apply(pp.queue).sort((a, b) => {
+        const sa = (a.J ?? 0) + (a.R ?? 0) + (a.N ?? 0);
+        const sb = (b.J ?? 0) + (b.R ?? 0) + (b.N ?? 0);
+        if (sb !== sa) return sb - sa;
+        return a.name.localeCompare(b.name);
+      });
+
+      const dormant = apply(pp.dormant);
+
+      return { purePlay: { ...pp, feature, queue, dormant } };
+    }),
+
+  /** Move an item from Dormant back to the Queue (auto re‑rank). */
+  movePurePlayDormantToQueue: (id: string) =>
+    set((state) => {
+      const pp = state.purePlay;
+      const item = pp.dormant.find(x => x.id === id);
+      if (!item) return { purePlay: pp };
+      const dormant = pp.dormant.filter(x => x.id !== id);
+      const queue = [...pp.queue, item].sort((a, b) => {
+        const sa = (a.J ?? 0) + (a.R ?? 0) + (a.N ?? 0);
+        const sb = (b.J ?? 0) + (b.R ?? 0) + (b.N ?? 0);
+        if (sb !== sa) return sb - sa;
+        return a.name.localeCompare(b.name);
+      });
+      return { purePlay: { ...pp, queue, dormant } };
+    }),
+
+
+  
+
+  /** ------------ Existing selectors/actions below ------------ */
 
   visibleVisionsForTab: (tab, sectionKey) => {
     const { visions, goals, visionTab, visionSection } = get();
