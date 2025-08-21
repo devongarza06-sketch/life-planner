@@ -107,6 +107,15 @@ export type PurePlayItem = {
   durationMin?: number;
 };
 
+/** Typed plan for scheduling a feature into the planner (fixes 'any' warnings). */
+export type PurePlayPlan = {
+  durationMin: number;
+  day: 0 | 1 | 2 | 3 | 4 | 5 | 6;             // 0=Sun … 6=Sat
+  mode: "specific" | "floating";
+  /** Required when mode === "specific"; ignored for floating. */
+  timeHHMM?: string | null;
+};
+
 type PurePlayState = {
   cycleDays: number;        // 8
   tokensPerCycle: number;   // 2
@@ -158,6 +167,8 @@ type Store = {
   movePurePlayToDormant: (id: string) => void;
   promoteNextPurePlayCandidate: () => void;
   usePurePlayTokenForFeature: () => { ok: boolean; reason?: string; usedId?: string };
+  /** NEW: spend 1 token and place the current feature into the weekly planner. */
+  consumeTokenAndScheduleFeature: (plan: PurePlayPlan) => { ok: boolean; reason?: string; usedId?: string };
 
   visibleVisionsForTab: (tab: TabId, sectionKey?: string) => Vision[];
   goalsForDirection: (directionId: string) => GoalNode[];
@@ -284,14 +295,7 @@ export const useStore = create<Store>((set, get) => ({
       return { purePlay: { ...state.purePlay, feature: next } };
     }),
 
-  /** Consume 1 token for Feature of the Week.
-   *  Rules:
-   *  - If no tokens left => fail
-   *  - If no queue items => fail
-   *  - Consume 1 token; record lastFeatureAtISO and clear current feature.
-   *  - Pop the used item out of the queue.
-   *  - Elevate next candidate by JRN (feature points at next).
-   */
+  /** Consume 1 token for Feature of the Week — *without* scheduling. */
   usePurePlayTokenForFeature: () => {
     const st = get().purePlay;
     // reset window if needed
@@ -321,7 +325,73 @@ export const useStore = create<Store>((set, get) => ({
     return { ok:true, usedId: useItem.id };
   },
 
-    /** Edit Pure‑Play item details (name/J/R/N/duration) wherever it lives. */
+  /** NEW: Spend 1 token *and* schedule the current candidate into the planner. */
+  consumeTokenAndScheduleFeature: (plan) => {
+    // Ensure window is valid and tokens remain
+    get().resetPurePlayWindowIfNeeded();
+    const { remaining } = get().getPurePlayTokenState();
+    if (remaining <= 0) return { ok:false, reason:"No tokens remaining in this 8‑day window." };
+
+    const pp = get().purePlay;
+    const candidateSorted = [...pp.queue].sort(sortByJRNDesc);
+    const useItem = pp.feature ?? candidateSorted[0] ?? null;
+    if (!useItem) return { ok:false, reason:"No item in queue to feature." };
+
+    const duration = clamp1to1440(plan.durationMin || useItem.durationMin || 60);
+    const day = plan.day as 0|1|2|3|4|5|6;
+
+    let start: string | null = null;
+    let fixed = false;
+
+    if (plan.mode === "specific" && plan.timeHHMM) {
+      // must not overlap; if taken, fail
+      const free = get().isSlotFree(day, plan.timeHHMM, duration);
+      if (!free) return { ok:false, reason:"That time slot is already taken." };
+      start = plan.timeHHMM;
+      fixed = true;
+    } else {
+      // floating: find next available slot (jump past conflicts)
+      const snap = get().settings.snapMinutes || 15;
+      const hint = plan.timeHHMM ?? "05:00";
+      start = get().findNextFreeSlot(day, hint, duration, "down", snap);
+      fixed = false;
+    }
+
+    const wk = getWeekKey();
+    const action: PlannerAction = {
+      id: uid(),
+      weekKey: wk,
+      goalId: `pureplay:${useItem.id}`,
+      templateKey: "feature",
+      label: useItem.name,
+      day,
+      durationMin: duration,
+      start,
+      order: 0,
+      fixed,
+      source: 'pureplay',
+    };
+
+    // Commit: add action, consume token, promote next, remove from queue
+    set((state) => {
+      const nextQueue = state.purePlay.queue.filter(q => q.id !== useItem.id);
+      const nextCandidate = [...nextQueue].sort(sortByJRNDesc)[0] ?? null;
+      return {
+        plannerActions: [...state.plannerActions, action],
+        purePlay: {
+          ...state.purePlay,
+          usedThisCycle: Math.min(state.purePlay.tokensPerCycle, state.purePlay.usedThisCycle + 1),
+          feature: nextCandidate,
+          lastFeatureAtISO: todayISO(),
+          queue: nextQueue,
+        }
+      };
+    });
+
+    return { ok:true, usedId: useItem.id };
+  },
+
+  /** Edit Pure‑Play item details (name/J/R/N/duration) wherever it lives. */
   updatePurePlayItem: (id: string, patch: Partial<PurePlayItem>) =>
     set((state) => {
       const pp = state.purePlay;
@@ -360,7 +430,6 @@ export const useStore = create<Store>((set, get) => ({
     }),
 
 
-  
 
   /** ------------ Existing selectors/actions below ------------ */
 
@@ -815,15 +884,25 @@ export const useStore = create<Store>((set, get) => ({
         rationale: undefined,
         order: 0,
         fixed: d.fixed,
+        source: 'goal',
       });
     }
 
-    set((s) => ({
-      plannerActions: [
-        ...s.plannerActions.filter(p => p.weekKey !== wk),
-        ...next
-      ]
-    }));
+set((s) => {
+  // Keep any existing actions for this week that are NOT from 'goal'
+  const preserved = s.plannerActions.filter(
+    p => p.weekKey === wk && p.source && p.source !== 'goal'
+  );
+  const others = s.plannerActions.filter(p => p.weekKey !== wk);
+  return {
+    plannerActions: [
+      ...others,
+      ...preserved,
+      ...next, // regenerated goal actions
+    ],
+  };
+});
+
   },
 
   movePlannerAction: (id, upd) =>

@@ -149,6 +149,7 @@ export type PlannerAction = {
   rationale?: string;
   order?: number;
   fixed?: boolean;
+  source?: 'goal' | 'pureplay' | 'manual';
 };
 
 export interface PlannerSettings {
