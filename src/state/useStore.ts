@@ -10,7 +10,8 @@ import {
 
 // ---------- helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 10);
-const clamp01to59 = (n:number) => Math.max(1, Math.min(59, Math.round(n)));
+// allow up to 24h (1440m)
+const clamp1to1440 = (n:number) => Math.max(1, Math.min(1440, Math.round(n)));
 
 type Horizon = "12+" | "1-3" | "other";
 type Rubric = "IART+G" | "JRN" | "UIE";
@@ -456,8 +457,6 @@ export const useStore = create<Store>((set, get) => ({
     if (!collides(cur)) return minToTime(cur);
 
     if (direction === "down") {
-      // move to just after any interval we intersect, keep going until clear
-      let moved = false;
       while (true) {
         let bumped = false;
         for (const [s,e] of intervals) {
@@ -465,7 +464,7 @@ export const useStore = create<Store>((set, get) => ({
             cur = Math.max(cur, e);
             cur = Math.ceil(cur/step)*step;
             cur = clamp(cur);
-            bumped = true; moved = true;
+            bumped = true;
           }
         }
         if (!bumped) break;
@@ -473,7 +472,6 @@ export const useStore = create<Store>((set, get) => ({
       }
       return minToTime(cur);
     } else {
-      // up: land just before the blocking interval
       while (true) {
         let bumped = false;
         for (let i = intervals.length-1; i>=0; i--) {
@@ -494,141 +492,131 @@ export const useStore = create<Store>((set, get) => ({
 
   // ---------- planner ----------
   generatePlannerActionsForWeek: (weekKey) => {
-  const wk = weekKey || getWeekKey();
-  const state = get();
-  const { boards, goals, settings } = state;
-  const snap = settings.snapMinutes || 15;
+    const wk = weekKey || getWeekKey();
+    const state = get();
+    const { boards, goals, settings } = state;
+    const snap = settings.snapMinutes || 15;
 
-  // Helper accessors from inside the store
-  const findNextFreeSlot = state.findNextFreeSlot;
+    const findNextFreeSlot = state.findNextFreeSlot;
 
-  // 1) Compute the "desired instances" for this week from active 1–3 boards.
-  type Desired = {
-    sig: string;                 // goalId|templateKey|day
-    goalId: string;
-    templateKey: string;
-    label: string;
-    day: 0|1|2|3|4|5|6;
-    durationMin: number;
-    start: string | null;        // explicit for specific, null for floating
-    fixed: boolean;
-  };
+    type Desired = {
+      sig: string;
+      goalId: string;
+      templateKey: string;
+      label: string;
+      day: 0|1|2|3|4|5|6;
+      durationMin: number;
+      start: string | null;
+      fixed: boolean;
+    };
 
-  const desired: Desired[] = [];
-  const active13 = boards.filter(b => b.tabId.endsWith("-13") && b.status === "active");
+    const desired: Desired[] = [];
+    const active13 = boards.filter(b => b.tabId.endsWith("-13") && b.status === "active");
 
-  for (const card of active13) {
-    const g = goals.find(x => x.id === card.id);
-    if (!g || !g.actionsTemplate || g.actionsTemplate.length === 0) continue;
+    for (const card of active13) {
+      const g = goals.find(x => x.id === card.id);
+      if (!g || !g.actionsTemplate || g.actionsTemplate.length === 0) continue;
 
-    for (const t of g.actionsTemplate) {
-      const dur = Math.max(1, Math.min(59, t.durationMin || 0));
-      if (!dur) continue;
+      for (const t of g.actionsTemplate) {
+        const dur = clamp1to1440(t.durationMin || 0);
+        if (!dur) continue;
 
-      if (t.mode === "specific") {
-        if (typeof t.day !== "number") continue;
-        const d = t.day as 0|1|2|3|4|5|6;
-        desired.push({
-          sig: `${g.id}|${t.key}|${d}`,
-          goalId: g.id,
-          templateKey: t.key,
-          label: t.label,
-          day: d,
-          durationMin: dur,
-          start: t.start ?? null,
-          fixed: !!t.start,
-        });
-        continue;
-      }
-
-      if (t.mode === "frequency" && (t.frequencyPerWeek || 0) > 0) {
-        const freq = Math.max(1, Math.min(7, Math.round(t.frequencyPerWeek as number)));
-        let days = (t.preferredDays && t.preferredDays.length)
-          ? t.preferredDays.slice(0)
-          : [1,3,5,0,2,4,6]; // M/W/F bias
-        const picks: number[] = [];
-        let i = 0;
-        while (picks.length < freq) { picks.push(days[i % days.length] as number); i++; }
-        for (const d of picks) {
-          const day = d as 0|1|2|3|4|5|6;
+        if (t.mode === "specific") {
+          if (typeof t.day !== "number") continue;
+          const d = t.day as 0|1|2|3|4|5|6;
           desired.push({
-            sig: `${g.id}|${t.key}|${day}`,
+            sig: `${g.id}|${t.key}|${d}`,
             goalId: g.id,
             templateKey: t.key,
             label: t.label,
-            day,
+            day: d,
             durationMin: dur,
-            start: null,     // floating
-            fixed: false,
+            start: t.start ?? null,
+            fixed: !!t.start,
           });
+          continue;
+        }
+
+        if (t.mode === "frequency" && (t.frequencyPerWeek || 0) > 0) {
+          const freq = Math.max(1, Math.min(7, Math.round(t.frequencyPerWeek as number)));
+          let days = (t.preferredDays && t.preferredDays.length)
+            ? t.preferredDays.slice(0)
+            : [1,3,5,0,2,4,6];
+          const picks: number[] = [];
+          let i = 0;
+          while (picks.length < freq) { picks.push(days[i % days.length] as number); i++; }
+          for (const d of picks) {
+            desired.push({
+              sig: `${g.id}|${t.key}|${d}`,
+              goalId: g.id,
+              templateKey: t.key,
+              label: t.label,
+              day: d as 0|1|2|3|4|5|6,
+              durationMin: dur,
+              start: null,
+              fixed: false,
+            });
+          }
         }
       }
     }
-  }
 
-  // 2) Partition current week actions: keep map by signature.
-  const existingWeek = state.plannerActions.filter(p => p.weekKey === wk);
-  const existingBySig = new Map<string, typeof existingWeek[number]>();
-  for (const a of existingWeek) {
-    existingBySig.set(`${a.goalId}|${a.templateKey}|${a.day}`, a);
-  }
+    const existingWeek = state.plannerActions.filter(p => p.weekKey === wk);
+    const existingBySig = new Map<string, typeof existingWeek[number]>();
+    for (const a of existingWeek) {
+      existingBySig.set(`${a.goalId}|${a.templateKey}|${a.day}`, a);
+    }
 
-  // 3) Build the next week set: keep existing where possible, add missing ones only.
-  const next: typeof existingWeek = [];
+    const next: typeof existingWeek = [];
 
-  // Occupancy helper uses current 'next' content for conflict-free placement.
-  const placeNonOverlapping = (day: 0|1|2|3|4|5|6, durationMin: number, startHint: string | null, fixed: boolean, excludeId?: string) => {
-    const start = findNextFreeSlot(day, startHint ?? "05:00", durationMin, "down", snap, excludeId);
-    return { start, fixed };
-  };
+    const placeNonOverlapping = (day: 0|1|2|3|4|5|6, durationMin: number, startHint: string | null, fixed: boolean, excludeId?: string) => {
+      const start = findNextFreeSlot(day, startHint ?? "05:00", durationMin, "down", snap, excludeId);
+      return { start, fixed };
+    };
 
-  // Keep existing (update label/duration/fixed but preserve start)
-  for (const d of desired) {
-    const ex = existingBySig.get(d.sig);
-    if (ex) {
+    // keep existing
+    for (const d of desired) {
+      const ex = existingBySig.get(d.sig);
+      if (ex) {
+        next.push({
+          ...ex,
+          label: d.label,
+          durationMin: d.durationMin,
+          fixed: d.fixed ? true : false,
+        });
+        existingBySig.delete(d.sig);
+      }
+    }
+
+    // add missing
+    for (const d of desired) {
+      if ([...next, ...existingWeek].some(a => `${a.goalId}|${a.templateKey}|${a.day}` === d.sig)) {
+        continue;
+      }
+      const placed = placeNonOverlapping(d.day, d.durationMin, d.start, d.fixed);
       next.push({
-        ...ex,
+        id: uid(),
+        weekKey: wk,
+        goalId: d.goalId,
+        templateKey: d.templateKey,
         label: d.label,
+        day: d.day,
         durationMin: d.durationMin,
-        fixed: d.fixed ? true : false,               // if now specific with explicit time, lock
-        // keep ex.start as-is (preserve user placement)
+        start: placed.start,
+        ifThenYet: undefined,
+        rationale: undefined,
+        order: 0,
+        fixed: d.fixed,
       });
-      existingBySig.delete(d.sig);
     }
-  }
 
-  // Add only the missing desired items
-  for (const d of desired) {
-    if ([...next, ...existingWeek].some(a => `${a.goalId}|${a.templateKey}|${a.day}` === d.sig)) {
-      // already present (kept above)
-      continue;
-    }
-    const placed = placeNonOverlapping(d.day, d.durationMin, d.start, d.fixed);
-    next.push({
-      id: Math.random().toString(36).slice(2, 10),
-      weekKey: wk,
-      goalId: d.goalId,
-      templateKey: d.templateKey,
-      label: d.label,
-      day: d.day,
-      durationMin: d.durationMin,
-      start: placed.start,
-      ifThenYet: undefined,
-      rationale: undefined,
-      order: 0,
-      fixed: d.fixed, // fixed if specific with explicit time
-    });
-  }
-
-  // 4) Replace ONLY this week's items with reconciled set.
-  set((s) => ({
-    plannerActions: [
-      ...s.plannerActions.filter(p => p.weekKey !== wk),
-      ...next
-    ]
-  }));
-},
-
+    set((s) => ({
+      plannerActions: [
+        ...s.plannerActions.filter(p => p.weekKey !== wk),
+        ...next
+      ]
+    }));
+  },
 
   movePlannerAction: (id, upd) =>
     set((s) => ({

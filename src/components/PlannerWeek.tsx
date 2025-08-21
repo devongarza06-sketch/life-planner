@@ -3,21 +3,11 @@ import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useStore } from "@/state/useStore";
 import type { PlannerAction } from "@/domain/types";
 
-/**
- * Overlap-safe planner:
- * - Any floating action (start == null) is auto-assigned the first free slot on its day.
- * - Fixed-time items remain locked.
- * - Dragging a floating item jumps to the nearest non-overlapping slot.
- * - Column/weekday mapping & scrolling retained.
- */
-
-// ---------- tuning ----------
 const DAY_START_HOUR = 5;
 const DAY_END_HOUR   = 23;
 const PX_PER_HOUR    = 60;
 const VIEWPORT_H     = 720;
 const LOCK_PAST_DAYS = false;
-// ----------------------------
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const timeToMin = (t: string) => {
@@ -51,15 +41,13 @@ export default function PlannerWeek() {
     updatePlannerAction,
     prefs,
     settings,
-    findNextFreeSlot, // store helper
+    findNextFreeSlot,
   } = useStore();
 
-  const snap = settings.snapMinutes || 15; // 15/30 etc.
+  const snap = settings.snapMinutes || 15;
   const startOfWeek = prefs.startOfWeek ?? 0;
-
   const days = useMemo(() => getWeekDays(startOfWeek), [startOfWeek]);
 
-  // bucket by weekday (0..6)
   const actionsByDow = useMemo(() => {
     const map: Record<number, PlannerAction[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     for (const a of plannerActions) (map[a.day] ||= []).push(a);
@@ -79,45 +67,33 @@ export default function PlannerWeek() {
     return map;
   }, [plannerActions]);
 
-  // ---------- NEW: normalization for floating items with no start ----------
+  // normalize floating items with no start
   useEffect(() => {
-    // For each weekday, assign first-free slot to any items with start === null
-    // This runs whenever plannerActions changes. It only sets start for items that lack it,
-    // so moved items (with a start) remain unchanged.
-    const normalize = async () => {
-      for (let dow = 0; dow < 7; dow++) {
-        const items = (actionsByDow[dow] || [])
-          .filter(a => !a.fixed)                       // floating only
-          .sort((a, b) => a.id.localeCompare(b.id));   // stable order
+    for (let dow = 0; dow < 7; dow++) {
+      const items = (actionsByDow[dow] || [])
+        .filter(a => !a.fixed)
+        .sort((a, b) => a.id.localeCompare(b.id));
 
-        for (const a of items) {
-          if (a.start != null) continue; // already placed, preserve
-          const dur = Math.max(1, Math.min(59, a.durationMin));
-          const hhmm = findNextFreeSlot(dow as 0|1|2|3|4|5|6, "05:00", dur, "down", snap, a.id);
-          updatePlannerAction(a.id, { start: hhmm, fixed: false });
-        }
+      for (const a of items) {
+        if (a.start != null) continue;
+        const dur = Math.max(1, a.durationMin);
+        const hhmm = findNextFreeSlot(dow as 0|1|2|3|4|5|6, "05:00", dur, "down", snap, a.id);
+        updatePlannerAction(a.id, { start: hhmm, fixed: false });
       }
-    };
-    normalize();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionsByDow, findNextFreeSlot, snap, updatePlannerAction]);
-  // ------------------------------------------------------------------------
+  }, [actionsByDow, findNextFreeSlot, snap]);
 
-  // past day lock (toggleable)
-  const todayMidnight = (() => {
-    const d = new Date(); d.setHours(0,0,0,0); return d.getTime();
-  })();
+  const todayMidnight = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
   const isPastDay = (colIdx: number) => {
     if (!LOCK_PAST_DAYS) return false;
     const d = days[colIdx]; const t = new Date(d);
     t.setHours(0,0,0,0); return t.getTime() < todayMidnight;
   };
 
-  // metrics
   const totalHours = DAY_END_HOUR - DAY_START_HOUR;
   const pxPerMin = PX_PER_HOUR / 60;
 
-  // drag state
   const [drag, setDrag] = useState<{
     id: string;
     colIdx: number;
@@ -175,9 +151,8 @@ export default function PlannerWeek() {
       const direction = movedMin >= 0 ? "down" : "up";
       const day = ((startOfWeek + drag.colIdx) % 7) as 0|1|2|3|4|5|6;
 
-      // Use the action's real duration when finding next free slot
       const action = plannerActions.find(p => p.id === drag.id);
-      const dur = Math.max(1, Math.min(59, action?.durationMin || 30));
+      const dur = Math.max(1, action?.durationMin || 30);
 
       const nextHHMM = findNextFreeSlot(day, minToTime(desired), dur, direction, snap, drag.id);
       updatePlannerAction(drag.id, { start: nextHHMM, fixed: false });
@@ -188,7 +163,6 @@ export default function PlannerWeek() {
     [drag, pxPerMin, snap, updatePlannerAction, startOfWeek, findNextFreeSlot, plannerActions]
   );
 
-  // ticks
   const ticks = useMemo(() => {
     const out: { time: string; top: number }[] = [];
     for (let h = DAY_START_HOUR; h <= DAY_END_HOUR; h++) {
@@ -221,7 +195,7 @@ export default function PlannerWeek() {
       >
         {/* time ruler */}
         <div className="relative">
-          <div className="relative" style={{ height: totalHours * PX_PER_HOUR }}>
+          <div className="relative" style={{ height: (DAY_END_HOUR - DAY_START_HOUR) * PX_PER_HOUR }}>
             {ticks.map((t) => (
               <div
                 key={t.time}
@@ -243,7 +217,7 @@ export default function PlannerWeek() {
           return (
             <div key={colIdx} className="relative border-l border-slate-600/40">
               {/* hour lines */}
-              <div className="absolute left-0 right-0" style={{ height: totalHours * PX_PER_HOUR }}>
+              <div className="absolute left-0 right-0" style={{ height: (DAY_END_HOUR - DAY_START_HOUR) * PX_PER_HOUR }}>
                 {ticks.map((t) => (
                   <div
                     key={t.time}
@@ -255,7 +229,7 @@ export default function PlannerWeek() {
 
               {/* items */}
               {items.map((a) => {
-                const durMin = Math.max(1, Math.min(59, a.durationMin));
+                const durMin = Math.max(1, a.durationMin);
                 const startMin = a.start ? timeToMin(a.start) : DAY_START_HOUR * 60;
                 const topMin = startMin - DAY_START_HOUR * 60;
                 const topPx =
@@ -263,7 +237,9 @@ export default function PlannerWeek() {
                     ? (topMin * (PX_PER_HOUR/60) + drag.offsetY)
                     : (topMin * (PX_PER_HOUR/60));
 
-                const heightPx = Math.max(PX_PER_HOUR * (durMin / 60), 18);
+                // Cap render height to visible window (05:00–23:00)
+                const maxVisible = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+                const heightPx = Math.max(PX_PER_HOUR * (Math.min(durMin, maxVisible) / 60), 18);
                 const fixed = !!a.fixed || lockedDay;
 
                 return (
