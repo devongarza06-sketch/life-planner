@@ -2,30 +2,26 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "@/components/Modal";
 import { useStore } from "@/state/useStore";
-import type {
-  ActionTemplate,
-  Milestone,
-  OPISMIT,
-  OCvEDaR,
-} from "@/domain/types";
+import { uid } from "@/state/constants";
+import type { ActionTemplate, Milestone, OPISMIT, OCvEDaR } from "@/domain/types";
 
 const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const START_MIN = 5 * 60;
 const END_MIN = 23 * 60;
 
 const newAction = (): ActionTemplate => ({
-  key: Math.random().toString(36).slice(2, 9),
+  key: uid(),            // stable id (no Math.random for SSR sanity)
   label: "New action",
   durationMin: 30,
   mode: "specific",
-  day: 1,          // 0=Sun..6=Sat
-  start: null,     // explicit time (optional)
+  day: 1,                // 0=Sun..6=Sat
+  start: null,           // explicit time (optional)
   ifThenYet: "",
   rationale: "",
 });
 
 const newMilestone = (): Milestone => ({
-  key: Math.random().toString(36).slice(2, 9),
+  key: uid(),
   label: "New milestone",
   target: "",
 });
@@ -62,7 +58,6 @@ export default function Active13EditModal() {
     const sanitize = (arr: ActionTemplate[]) =>
       arr.map((a) => {
         const x = { ...a };
-        // allow up to 24h
         x.durationMin = Math.max(1, Math.min(1440, Math.round(x.durationMin || 30)));
         if (x.mode === "specific") {
           x.frequencyPerWeek = undefined;
@@ -82,7 +77,11 @@ export default function Active13EditModal() {
       opismit,
     });
 
-    try { generatePlannerActionsForWeek?.(); } catch {}
+    try {
+      generatePlannerActionsForWeek?.();
+    } catch {
+      // no-op
+    }
 
     onClose();
   };
@@ -262,8 +261,8 @@ function useAvailability() {
   const hasAnyFreeOnDay = (day: 0|1|2|3|4|5|6, durationMin: number) => {
     const dur = Math.max(1, Math.min(1440, Math.round(durationMin || 1)));
     for (let m = START_MIN; m <= END_MIN; m += snap) {
-      const hh = String(Math.floor(m/60)).padStart(2,"0");
-      const mm = String(m%60).padStart(2,"0");
+      const hh = String(Math.floor(m / 60)).padStart(2, "0");
+      const mm = String(m % 60).padStart(2, "0");
       const hhmm = `${hh}:${mm}`;
       if (isSlotFree(day, hhmm, dur)) return true;
     }
@@ -273,24 +272,24 @@ function useAvailability() {
   const timeOptionsForDay = (day: 0|1|2|3|4|5|6, durationMin: number) => {
     const out: { hhmm: string; free: boolean }[] = [];
     for (let m = START_MIN; m <= END_MIN; m += snap) {
-      const hh = String(Math.floor(m/60)).padStart(2,"0");
-      const mm = String(m%60).padStart(2,"0");
+      const hh = String(Math.floor(m / 60)).padStart(2, "0");
+      const mm = String(m % 60).padStart(2, "0");
       const hhmm = `${hh}:${mm}`;
       out.push({ hhmm, free: isSlotFree(day, hhmm, durationMin) });
     }
     return out;
   };
 
-  // For frequency: a time is selectable only if it's free across all chosen days
-  const timeOptionsForDaysAll = (days:number[], durationMin:number) => {
+  const timeOptionsForDaysAll = (days: number[], durationMin: number) => {
     const out: { hhmm: string; free: boolean }[] = [];
     for (let m = START_MIN; m <= END_MIN; m += snap) {
-      const hh = String(Math.floor(m/60)).padStart(2,"0");
-      const mm = String(m%60).padStart(2,"0");
+      const hh = String(Math.floor(m / 60)).padStart(2, "0");
+      const mm = String(m % 60).padStart(2, "0");
       const hhmm = `${hh}:${mm}`;
-      const ok = days.length === 0
-        ? true
-        : days.every(d => isSlotFree(d as 0|1|2|3|4|5|6, hhmm, durationMin));
+      const ok =
+        days.length === 0
+          ? true
+          : days.every((d) => isSlotFree(d as 0|1|2|3|4|5|6, hhmm, durationMin));
       out.push({ hhmm, free: ok });
     }
     return out;
@@ -299,7 +298,7 @@ function useAvailability() {
   return { hasAnyFreeOnDay, timeOptionsForDay, timeOptionsForDaysAll, snap };
 }
 
-/* ---------- Action row (availability-aware) ---------- */
+/* ---------- Action row ---------- */
 function ActionRow({
   value,
   onChange,
@@ -311,11 +310,11 @@ function ActionRow({
   onRemove: () => void;
   idx: number;
 }) {
-  const { hasAnyFreeOnDay, timeOptionsForDay, timeOptionsForDaysAll, snap } = useAvailability();
+  const { hasAnyFreeOnDay, timeOptionsForDay, timeOptionsForDaysAll, snap } =
+    useAvailability();
 
   const dur = Math.max(1, Math.min(1440, Math.round(value.durationMin || 30)));
 
-  // SPECIFIC: compute day availability & time options
   const specificDayDisabled = useMemo(() => {
     const res: Record<number, boolean> = {};
     for (let d = 0; d < 7; d++) res[d] = !hasAnyFreeOnDay(d as 0|1|2|3|4|5|6, dur);
@@ -327,7 +326,6 @@ function ActionRow({
     return timeOptionsForDay(day, dur);
   }, [value.day, dur, timeOptionsForDay]);
 
-  // FREQUENCY: days availability under multi-day selection & advisory time
   const freqDaysDisabled = useMemo(() => {
     const res: Record<number, boolean> = {};
     for (let d = 0; d < 7; d++) res[d] = !hasAnyFreeOnDay(d as 0|1|2|3|4|5|6, dur);
@@ -339,8 +337,7 @@ function ActionRow({
     return timeOptionsForDaysAll(days, dur);
   }, [value.preferredDays, dur, timeOptionsForDaysAll]);
 
-  // Warn if duration exceeds visible window
-  const windowMax = (END_MIN - START_MIN);
+  const windowMax = END_MIN - START_MIN;
   const tooLongForWindow = dur > windowMax;
 
   return (
@@ -366,15 +363,23 @@ function ActionRow({
           <span className="text-xs text-slate-400">Duration</span>
           <input
             className={`rounded border p-2 text-sm w-28 ${
-              tooLongForWindow ? "border-amber-500 bg-amber-900/20" : "border-slate-600 bg-slate-900"
+              tooLongForWindow
+                ? "border-amber-500 bg-amber-900/20"
+                : "border-slate-600 bg-slate-900"
             }`}
             type="number"
             min={1}
             max={1440}
             step={snap}
             value={dur}
-            onChange={(e) => onChange({ ...value, durationMin: +e.target.value })}
-            title={tooLongForWindow ? "Exceeds the 05:00–23:00 visible window; will be capped visually." : "Minutes (up to 1440)"}
+            onChange={(e) =>
+              onChange({ ...value, durationMin: +e.target.value })
+            }
+            title={
+              tooLongForWindow
+                ? "Exceeds the 05:00–23:00 visible window; will be capped visually."
+                : "Minutes (up to 1440)"
+            }
           />
           <span className="text-xs text-slate-400">min</span>
         </div>
@@ -393,36 +398,40 @@ function ActionRow({
 
       {value.mode === "specific" ? (
         <div className="grid md:grid-cols-3 gap-2 mt-2">
-          {/* Day (grey out days with no available slot for the chosen duration) */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Day</span>
             <select
               className="rounded border border-slate-600 bg-slate-900 p-2 text-sm"
               value={value.day ?? 1}
-              onChange={(e) => onChange({ ...value, day: +e.target.value as any, start: null })}
+              onChange={(e) =>
+                onChange({ ...value, day: +e.target.value as any, start: null })
+              }
               title="Days without free space are disabled"
             >
               {DAY.map((d, i) => (
                 <option key={i} value={i} disabled={specificDayDisabled[i]}>
-                  {d}{specificDayDisabled[i] ? " (full)" : ""}
+                  {d}
+                  {specificDayDisabled[i] ? " (full)" : ""}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Time (grey out occupied times for selected day & duration) */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Time</span>
             <div className="relative">
               <select
                 className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-36"
                 value={value.start || ""}
-                onChange={(e) => onChange({ ...value, start: e.target.value || null })}
+                onChange={(e) =>
+                  onChange({ ...value, start: e.target.value || null })
+                }
               >
                 <option value="">—</option>
                 {specificTimes.map(({ hhmm, free }) => (
                   <option key={hhmm} value={free ? hhmm : ""} disabled={!free}>
-                    {hhmm}{!free ? "  (unavailable)" : ""}
+                    {hhmm}
+                    {!free ? "  (unavailable)" : ""}
                   </option>
                 ))}
               </select>
@@ -435,7 +444,6 @@ function ActionRow({
         </div>
       ) : (
         <div className="grid md:grid-cols-3 gap-2 mt-2">
-          {/* Frequency per week */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">/week</span>
             <input
@@ -444,36 +452,41 @@ function ActionRow({
               min={1}
               max={7}
               value={value.frequencyPerWeek || 3}
-              onChange={(e) => onChange({ ...value, frequencyPerWeek: +e.target.value })}
+              onChange={(e) =>
+                onChange({ ...value, frequencyPerWeek: +e.target.value })
+              }
             />
           </div>
 
-          {/* Multi-day with greying (no room for duration) */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Days</span>
             <MultiDay
               value={value.preferredDays || []}
               onChange={(arr) => onChange({ ...value, preferredDays: arr })}
-              disabledByDay={Object.fromEntries(Object.entries([0,1,2,3,4,5,6]).map(([i]) => {
-                const idx = Number(i);
-                return [idx, freqDaysDisabled[idx]];
-              })) as Record<number, boolean>}
+              disabledByDay={Object.fromEntries(
+                Object.entries([0, 1, 2, 3, 4, 5, 6]).map(([i]) => {
+                  const idx = Number(i);
+                  return [idx, freqDaysDisabled[idx]];
+                })
+              ) as Record<number, boolean>}
             />
           </div>
 
-          {/* Advisory time: free only if it's free across all chosen days */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Time</span>
             <div className="relative">
               <select
                 className="rounded border border-slate-600 bg-slate-900 p-2 text-sm w-36"
                 value={value.preferredStart || ""}
-                onChange={(e) => onChange({ ...value, preferredStart: e.target.value || null })}
+                onChange={(e) =>
+                  onChange({ ...value, preferredStart: e.target.value || null })
+                }
               >
                 <option value="">—</option>
                 {freqTimeOptions.map(({ hhmm, free }) => (
                   <option key={hhmm} value={free ? hhmm : ""} disabled={!free}>
-                    {hhmm}{!free ? "  (unavailable for some selected days)" : ""}
+                    {hhmm}
+                    {!free ? "  (unavailable for some selected days)" : ""}
                   </option>
                 ))}
               </select>
@@ -509,7 +522,7 @@ function ActionRow({
   );
 }
 
-/* ---------- Multi-day selector (with per-day disabling) ---------- */
+/* ---------- Multi-day selector ---------- */
 function MultiDay({
   value,
   onChange,
@@ -520,7 +533,7 @@ function MultiDay({
   disabledByDay?: Record<number, boolean>;
 }) {
   const toggle = (i: number) => {
-    if (disabledByDay?.[i]) return; // blocked
+    if (disabledByDay?.[i]) return;
     onChange(value.includes(i) ? value.filter((d) => d !== i) : [...value, i].sort());
   };
   return (
@@ -538,8 +551,8 @@ function MultiDay({
               disabled
                 ? "bg-slate-800/50 text-slate-500 border-slate-700 cursor-not-allowed"
                 : active
-                  ? "bg-indigo-600 text-white border-indigo-600"
-                  : "bg-slate-900 text-slate-200 border-slate-600 hover:bg-slate-800"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-slate-900 text-slate-200 border-slate-600 hover:bg-slate-800"
             }`}
             title={disabled ? "No available slot on this day for the chosen duration" : ""}
           >

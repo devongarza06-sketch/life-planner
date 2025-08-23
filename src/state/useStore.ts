@@ -1,8 +1,11 @@
+// src/state/useStore.ts
 "use client";
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+
 import {
   BoardCard, BoardStatus, Budget, GoalNode, Task, Vision, UserPrefs, PlannerSettings, TabId,
-  PlannerAction, ActionTemplate
+  PlannerAction
 } from "@/domain/types";
 import {
   seedBoards, seedBudgets, seedGoals, seedTasks, seedVisions, seedPrefs, seedSettings
@@ -12,9 +15,11 @@ import { createPurePlaySlice } from "./slices/purePlay.slice";
 import { createGoalsSlice } from "./slices/goals.slice";
 import { createBoardsSlice } from "./slices/boards.slice";
 import { createPlannerSlice } from "./slices/planner.slice";
-import type { Horizon, Rubric } from "./constants";
-import type { ScoreInputs } from "./utils/score";
+import type { Horizon } from "./constants";
 import type { PurePlayItem, PurePlayPlan, PurePlayState } from "./pureplay.types";
+import { createSystemsSlice } from "./slices/systems.slice";
+import { createProjectsSlice } from "./slices/projects.slice";
+import { demoData } from "./fixtures/demo";
 
 // -------- Store type (public surface stays the same) --------
 type Store = {
@@ -83,50 +88,208 @@ type Store = {
     snap?: number,
     excludeId?: string
   ) => string;
+
+  // --- Systems ---
+  systems: import("./slices/systems.slice").SystemItem[];
+  addSystem: (title?: string) => string;
+  updateSystem: (id: string, patch: Partial<Omit<import("./slices/systems.slice").SystemItem, "id">>) => void;
+  removeSystem: (id: string) => void;
+  addSystemAction: (systemId: string) => void;
+  updateSystemAction: (systemId: string, key: string, patch: Partial<import("@/domain/types").ActionTemplate>) => void;
+  removeSystemAction: (systemId: string, key: string) => void;
+  scheduleSystemToWeek: (systemId: string, weekKey?: string) => { created: number };
+
+  // --- Projects ---
+  projects: import("./slices/projects.slice").Project[];
+  addProject: (title?: string) => string;
+  updateProject: (id: string, patch: Partial<Omit<import("./slices/projects.slice").Project, "id">>) => void;
+  removeProject: (id: string) => void;
+  addStep: (projectId: string, title?: string) => string;
+  updateStep: (projectId: string, stepId: string, patch: Partial<import("./slices/projects.slice").ProjectStep>) => void;
+  removeStep: (projectId: string, stepId: string) => void;
+  addStepAction: (projectId: string, stepId: string) => void;
+  updateStepAction: (projectId: string, stepId: string, key: string, patch: Partial<import("@/domain/types").ActionTemplate>) => void;
+  removeStepAction: (projectId: string, stepId: string, key: string) => void;
+  scheduleProjectToWeek: (projectId: string, weekKey?: string) => { created: number };
+  scheduleStepToWeek: (projectId: string, stepId: string, weekKey?: string) => { created: number };
+
+  // --- Persistence helpers ---
+  loadDemo: () => void;
+  exportJSON: () => string;
+  importJSON: (json: string) => { ok: boolean; error?: string };
+  resetAll: () => void;
 };
 
-// Re-export types to preserve public API
+// Re-export
 export type { PurePlayItem, PurePlayPlan } from "./pureplay.types";
 
-// IMPORTANT: include the 3rd argument `api` and pass it to slices
-export const useStore = create<Store>()((set, get, api) => ({
-  // ----- Core seeds & simple UI state (unchanged behavior) -----
-  budgets: seedBudgets,
-  visions: seedVisions,
-  goals: seedGoals,
-  boards: seedBoards,
-  tasks: seedTasks,
-  prefs: seedPrefs[0],
-  settings: seedSettings[0],
+// Guarded storage for Next.js (no SSR access to localStorage)
+const safeStorage = createJSONStorage(() => {
+  if (typeof window === "undefined") return undefined as unknown as Storage;
+  return window.localStorage;
+});
 
-  selected: { passion: null, person: null, play: null },
-  selectedPerson: { physical: null, cognitive: null, emotional: null, social: null, meaning: null },
-  visionTab: {},
-  visionSection: {},
+// IMPORTANT: we wrap with persist and keep the same API
+export const useStore = create<Store>()(
+  persist(
+    (set, get, api) => ({
+      // ----- Core seeds -----
+      budgets: seedBudgets,
+      visions: seedVisions,
+      goals: seedGoals,
+      boards: seedBoards,
+      tasks: seedTasks,
+      prefs: seedPrefs[0],
+      settings: seedSettings[0],
 
-  openRubricForGoalId: null,
-  setOpenRubricForGoalId: (id) => set(() => ({ openRubricForGoalId: id })),
-  openActive13ForGoalId: null,
-  setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
+      selected: { passion: null, person: null, play: null },
+      selectedPerson: { physical: null, cognitive: null, emotional: null, social: null, meaning: null },
+      visionTab: {},
+      visionSection: {},
 
-  plannerActions: [],
+      openRubricForGoalId: null,
+      setOpenRubricForGoalId: (id) => set(() => ({ openRubricForGoalId: id })),
+      openActive13ForGoalId: null,
+      setOpenActive13ForGoalId: (id) => set(() => ({ openActive13ForGoalId: id })),
 
-  // ----- Merge feature slices (now with api) -----
-  ...createPurePlaySlice(set, get, api),
-  ...createGoalsSlice(set, get, api),
-  ...createBoardsSlice(set, get, api),
-  ...createPlannerSlice(set, get, api),
+      plannerActions: [],
 
-  // ----- Budget update stays local (simple) -----
-  updateBudget: (idx, value) =>
-    set((state) => {
-      const next = [...state.budgets];
-      const b = {
-        ...next[0],
-        daily: [...next[0].daily] as [number, number, number, number],
-      };
-      b.daily[idx] = Math.max(0, Math.min(100, Math.round(value)));
-      next[0] = b;
-      return { budgets: next };
+      // ----- Feature slices -----
+      ...createPurePlaySlice(set, get, api),
+      ...createGoalsSlice(set, get, api),
+      ...createBoardsSlice(set, get, api),
+      ...createPlannerSlice(set, get, api),
+      ...createSystemsSlice(set, get, api),
+      ...createProjectsSlice(set, get, api),
+
+      // ----- Budget update (unchanged) -----
+      updateBudget: (idx, value) =>
+        set((state) => {
+          const next = [...state.budgets];
+          const b = {
+            ...next[0],
+            daily: [...next[0].daily] as [number, number, number, number],
+          };
+          b.daily[idx] = Math.max(0, Math.min(100, Math.round(value)));
+          next[0] = b;
+          return { budgets: next };
+        }),
+
+      // ----- Persistence helpers -----
+      loadDemo: () => {
+        const demo = demoData();
+        // merge without nuking your existing seeds
+        set((s) => ({
+          systems: demo.systems.concat(s.systems ?? []),
+          projects: demo.projects.concat(s.projects ?? []),
+          purePlay: {
+            ...s.purePlay,
+            queue: (s.purePlay?.queue ?? []).concat(demo.purePlayQueue),
+          },
+        }));
+      },
+
+      exportJSON: () => {
+        const s = get();
+        const data = {
+          budgets: s.budgets,
+          visions: s.visions,
+          goals: s.goals,
+          boards: s.boards,
+          tasks: s.tasks,
+          prefs: s.prefs,
+          settings: s.settings,
+          selected: s.selected,
+          selectedPerson: s.selectedPerson,
+          visionTab: s.visionTab,
+          visionSection: s.visionSection,
+          plannerActions: s.plannerActions,
+          purePlay: s.purePlay,
+          systems: (s as any).systems ?? [],
+          projects: (s as any).projects ?? [],
+        };
+        return JSON.stringify(data, null, 2);
+      },
+
+      importJSON: (json: string) => {
+        try {
+          const data = JSON.parse(json);
+          set(() => ({
+            budgets: data.budgets ?? seedBudgets,
+            visions: data.visions ?? seedVisions,
+            goals: data.goals ?? seedGoals,
+            boards: data.boards ?? seedBoards,
+            tasks: data.tasks ?? seedTasks,
+            prefs: data.prefs ?? seedPrefs[0],
+            settings: data.settings ?? seedSettings[0],
+            selected: data.selected ?? { passion: null, person: null, play: null },
+            selectedPerson: data.selectedPerson ?? { physical: null, cognitive: null, emotional: null, social: null, meaning: null },
+            visionTab: data.visionTab ?? {},
+            visionSection: data.visionSection ?? {},
+            plannerActions: data.plannerActions ?? [],
+            purePlay: data.purePlay ?? get().purePlay,
+            systems: data.systems ?? (get() as any).systems ?? [],
+            projects: data.projects ?? (get() as any).projects ?? [],
+          }));
+          return { ok: true };
+        } catch (e:any) {
+          return { ok: false, error: e?.message || "Invalid JSON" };
+        }
+      },
+
+      resetAll: () => {
+        set(() => ({
+          budgets: seedBudgets,
+          visions: seedVisions,
+          goals: seedGoals,
+          boards: seedBoards,
+          tasks: seedTasks,
+          prefs: seedPrefs[0],
+          settings: seedSettings[0],
+          selected: { passion: null, person: null, play: null },
+          selectedPerson: { physical: null, cognitive: null, emotional: null, social: null, meaning: null },
+          visionTab: {},
+          visionSection: {},
+          plannerActions: [],
+          // leave slices to their own initializers
+          ...(createPurePlaySlice as any)((x:any)=>x, ()=>({}), {}), // no-op; we keep current purePlay
+        }));
+        // Also wipe the persisted storage key so a reload starts clean
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("life-planner");
+        }
+      },
     }),
-}));
+    {
+      name: "life-planner",
+      version: 1,
+      storage: safeStorage,
+      // Persist only user-ish state
+      partialize: (s: Store) => ({
+        budgets: s.budgets,
+        visions: s.visions,
+        goals: s.goals,
+        boards: s.boards,
+        tasks: s.tasks,
+        prefs: s.prefs,
+        settings: s.settings,
+        selected: s.selected,
+        selectedPerson: s.selectedPerson,
+        visionTab: s.visionTab,
+        visionSection: s.visionSection,
+        plannerActions: s.plannerActions,
+        purePlay: s.purePlay,
+        systems: (s as any).systems ?? [],
+        projects: (s as any).projects ?? [],
+      }),
+      migrate: (persisted, from) => {
+        // Simple forward-compatible migration
+        if (!persisted) return persisted as any;
+        if (from < 1) {
+          // future migrations
+        }
+        return persisted as any;
+      },
+    }
+  )
+);

@@ -1,9 +1,23 @@
 "use client";
+import { useStore } from "@/state/useStore";
+import SystemCard from "@/components/SystemCard";
+import ProjectCard from "@/components/ProjectCard";
+import { useMemo } from "react";
 
 export default function MiscTab(){
   const families = [
     "Finance & Money Ops","Home & Environment","Errands & Procurement","Digital Hygiene","Legal & Identity","Healthcare Admin","Work/School Admin","Transportation & Travel","Security & Risk","Life Ops & Organization","Pets & Dependents","Events & Seasonal Prep","Relationships & Civic Admin"
   ];
+
+  const systems = useStore(s => s.systems);
+  const addSystem = useStore(s => s.addSystem);
+
+  const projects = useStore(s => s.projects);
+  const addProject = useStore(s => s.addProject);
+
+  const activeSystems = systems.filter(s => s.status === "active");
+  const dormantSystems = systems.filter(s => s.status === "dormant");
+
   return (
     <div className="space-y-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
@@ -16,37 +30,57 @@ export default function MiscTab(){
         </details>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
-          <h4 className="font-semibold mb-1">Maintenance Systems</h4>
-          <ul className="list-disc ml-4 text-sm space-y-1">
-            <li>2×45-min weekly maintenance blocks</li>
-            <li>Monthly Admin Day (finance, digital, subscriptions)</li>
-            <li>Quick-hit rule: tasks ≤10 min inside blocks</li>
-          </ul>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
-          <h4 className="font-semibold mb-1">Mini-Project Card</h4>
-          <div className="text-sm space-y-2">
-            <input className="w-full border rounded p-2" placeholder="Outcome (clear done + date)"/>
-            <textarea className="w-full border rounded p-2" placeholder="Steps"/>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div><div className="mb-1">Risk</div><input className="w-full border rounded p-1" defaultValue={4}/></div>
-              <div><div className="mb-1">Obligation</div><input className="w-full border rounded p-1" defaultValue={5}/></div>
-              <div><div className="mb-1">Batchability</div><input className="w-full border rounded p-1" defaultValue={3}/></div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* LEFT: Systems */}
+        <div className="bg-white/5 rounded-2xl p-3 shadow space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold">Miscellaneous Systems</h4>
+            <button className="px-3 py-1 rounded border text-sm" onClick={()=>addSystem()}>+ Add system</button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-gray-400 mb-2">Active Systems</div>
+              {activeSystems.length === 0 && (<div className="text-sm text-gray-500">None yet.</div>)}
+              <div className="space-y-3">
+                {activeSystems.map(sys => (<SystemCard key={sys.id} system={sys} />))}
+              </div>
             </div>
-            <div className="text-xs text-gray-500">Schedule 2×45-min blocks • attach proof when done</div>
-            <button className="w-full bg-accent text-white rounded px-3 py-2">Schedule</button>
+            <div className="pt-2">
+              <div className="text-xs uppercase tracking-wide text-gray-400 mb-2">Dormant Systems</div>
+              {dormantSystems.length === 0 && (<div className="text-sm text-gray-500">None.</div>)}
+              <div className="space-y-3">
+                {dormantSystems.map(sys => (<SystemCard key={sys.id} system={sys} />))}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow">
-          <h4 className="font-semibold mb-1">Monthly Admin Day</h4>
-          <ul className="list-disc ml-4 text-sm space-y-1">
-            <li>Finance sweep: bills, budget, transfers</li>
-            <li>Digital sweep: inbox, files, backups</li>
-            <li>Subscriptions audit</li>
-            <li>Surface & schedule mini-projects</li>
-          </ul>
+
+        {/* RIGHT: Projects */}
+        <div className="bg-white/5 rounded-2xl p-3 shadow space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold">Mini‑Projects</h4>
+            <button className="px-3 py-1 rounded border text-sm" onClick={()=>addProject()}>+ Add project</button>
+          </div>
+
+          {projects.length === 0 && (
+            <div className="text-sm text-gray-500">No mini‑projects yet.</div>
+          )}
+
+          <div className="space-y-3">
+            {projects.map(p => (<ProjectCard key={p.id} project={p} />))}
+          </div>
+
+          {/* Monthly Admin Day helper box retained */}
+          <div className="rounded-2xl border p-3">
+            <h5 className="font-semibold mb-2">Monthly Admin Day</h5>
+            <ul className="list-disc ml-4 text-sm space-y-1">
+              <li>Finance sweep: bills, budget, transfers</li>
+              <li>Digital sweep: inbox, files, backups</li>
+              <li>Subscriptions audit</li>
+              <li>Surface & schedule mini-projects</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import type { StateCreator, StoreApi } from "zustand";
 import type { PlannerAction } from "@/domain/types";
 import { getWeekKey, timeToMin, minToTime, clamp1to1440 } from "../utils/time";
+import { uid } from "../constants";
 
 type Slice = {
   isSlotFree: (day: 0|1|2|3|4|5|6, startHHMM: string, durationMin: number, excludeId?: string) => boolean;
@@ -195,7 +196,7 @@ export const createPlannerSlice: StateCreator<any, [], [], Slice> = (set, get, _
       }
       const placed = placeNonOverlapping(d.day, d.durationMin, d.start, d.fixed);
       next.push({
-        id: (Math.random().toString(36).slice(2,10)),
+        id: uid(),
         weekKey: wk,
         goalId: d.goalId,
         templateKey: d.templateKey,
